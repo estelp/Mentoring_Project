@@ -76,3 +76,18 @@ This mind map summarizes in one image all the reflections made around our theme.
 - Restitution & Reproducibility
 
 
+## BIOINFORMTIC STRATEGY
+
+### 1. Data acquisition
+
+All work or bioinformatics strategy was carried out on the Montpellier cluster (bioinfo-master1.ird.fr).
+So, the first step before executing the scripts was to connect to the cluster on your terminal via your login
+
+...
+ssh login@bioinfo-master1.ird.fr
+
+
+
+### 2. Quality Control
+### 3. Mapping
+### 4. SNP calling
