@@ -155,7 +155,7 @@ mkdir -p /scratch/MOryzae/QC
 mkdir -p /scratch/MOryzae/QC
 cd /scratch/MOryzae/QC
 ```
-* <u>FASTQC</u>
+* **<u>FASTQC</u>**
 
 Create the “FastQC” directory in the QC directory for outputs 
 
@@ -256,7 +256,7 @@ fi
 ```
 
 Run the script 
-[Access FastqQC.sh]/Wrappers/FastQC)
+[Access FastqQC.sh](/Wrappers/FastQC.sh)
 
 ```bash
 sbash FastQC.sh
@@ -271,7 +271,7 @@ ls -lh /scratch/MOryzae/QC/FastQC/
 ### Use generated html files to check read quality
 
 
-* <u>MULTIQC</u>
+* **<u>MULTIQC</u>**
 
 ### 3. Mapping
 ### 4. SNP calling
