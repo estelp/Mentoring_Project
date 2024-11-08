@@ -335,7 +335,7 @@ fi
 ```
 
 Run the script
-[Access FastqQC.sh](/Wrappers/MultiQC.sh)
+[Access MultiQC.sh](/Wrappers/MultiQC.sh)
 
 ```bash
 sbash MultiQC.sh
