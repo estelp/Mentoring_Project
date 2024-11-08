@@ -81,12 +81,44 @@ This mind map summarizes in one image all the reflections made around our theme.
 ### 1. Data acquisition
 
 All work or bioinformatics strategy was carried out on the Montpellier cluster (bioinfo-master1.ird.fr).
-So, the first step before executing the scripts was to connect to the cluster on your terminal via your login
+So, the first step before executing the scripts was 
 
+	* to connect to the cluster on your terminal via your login
 ...bash
 ssh login@bioinfo-master1.ird.fr
-
-
+...
+	* Connect to a node on a specific partition according to your analyses
+x = partition
+y = number of cpus
+...bash
+srun -p x -c y --pty bash -i
+...
+	* Create the “MOryzae” working directory in the “scratch” directory and move around in it
+...bash
+mkdir -p /scratch/MOryzae
+cd /scratch/MOryzae
+...
+	* Display absolute path
+...bash
+pwd
+...
+	* Display directory contents
+...bash
+ls -lh
+...
+	* Create a “DATA” subdirectory for sequencing data
+...bash
+mkdir DATA
+...
+	* Create two sub-directories “Raw_Data” for paired-end sequences and “Contigs” for assembled sequences 
+...bash
+mkdir -p DATA/Raw_Data 
+mkdir -p DATA/Contigs
+...
+	* Copy the sequencing data from the NAS into the “DATA/Raw_Data” directory
+...bash
+scp -r san:/projects/medium/CIBiG_MOryzae/fastq/*_R* /scratch/MOryzae/DATA/Raw_Data
+...
 
 ### 2. Quality Control
 ### 3. Mapping
