@@ -268,10 +268,105 @@ At the end of the task, check the contents
 ls -lh /scratch/MOryzae/QC/FastQC/
 ```
 
-### Use generated html files to check read quality
+Use generated html files to check read quality
 
 
 * **<u>MULTIQC</u>**
+
+This step consolidates the html reports from FastQC into a single, easy-to-interpret report. To do this
+
+Create the “MultiQC” directory in the QC directory for outputs 
+
+
+```bash
+mkdir -p /scratch/MOryzae/QC/MultiQC
+```
+
+Open the nano text editor to edit a sbatch script
+
+```bash
+nano MultiQC.sh
+```
+
+save the following sbatch script
+
+```bash
+#!/bin/bash
+
+############# SLURM Configuration ##############
+
+### Define Job name
+#SBATCH --job-name=multiqc
+
+### Define partition to use
+#SBATCH -p normal
+
+### Define number of CPUs to use
+#SBATCH -c 8
+
+### Specify the node to run on
+#SBATCH --nodelist=node13  # Specifies that the job should run on node13
+
+#################################################
+
+########### Execution Command ##################
+
+# Define paths to the working directories
+FASTQC_PATH="/scratch/MOryzae/QC/FastQC"
+MULTIQC_OUTPUT_PATH="/scratch/MOryzae/QC/MultiQC"
+
+# Load the MultiQC module
+module load multiqc/1.9
+
+# Create the output directory
+mkdir -p "$MULTIQC_OUTPUT_PATH"
+
+# Run MultiQC on the FastQC reports
+echo "Running MultiQC on FastQC reports in $FASTQC_PATH..."
+multiqc "$FASTQC_PATH" -o "$MULTIQC_OUTPUT_PATH"
+
+# Check if MultiQC ran successfully
+if [[ $? -eq 0 ]]; then
+    echo "MultiQC completed successfully."
+else
+    echo "Error: MultiQC encountered an issue."
+fi
+
+```
+
+Run the script
+[Access FastqQC.sh](/Wrappers/MultiQC.sh)
+
+```bash
+sbash MultiQC.sh
+```
+
+At the end of the task, check the contents
+
+```bash
+ls -lh /scratch/MOryzae/QC/MultiQC/
+```
+
+Use generated html files to check read quality
+
+For the next step,
+Move the entire contents of the QC directory to the NAS
+
+```bash
+scp -r /scratch/MOryzae/QC san:/projects/medium/CIBiG_MOryzae/
+```
+
+Delete the QC directory on the working directory to free up space
+
+```bash
+rm -rf /scratch/MOryzae/QC
+```
+
+Retrieve this QC directory from the NAS on your local machine to analyze the results
+
+```bash
+scp -r login@bioinfo-san.ird.fr:/projects/medium/CIBiG_MOryzae/QC /path/to/working dorectory/on your laptop/
+```
 
 ### 3. Mapping
 ### 4. SNP calling
