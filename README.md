@@ -78,6 +78,9 @@ This mind map summarizes in one image all the reflections made around our theme.
 
 ## BIOINFORMTIC STRATEGY
 
+The entire bioinformatics strategy was carried out in several stages. 
+The jupyters for all these stages are available in the [Jupyter_books](/Jupyter_books) directory.
+
 ### 1. Data acquisition
 
 All work or bioinformatics strategy was carried out on the Montpellier cluster (bioinfo-master1.ird.fr).
@@ -368,5 +371,8 @@ Retrieve this QC directory from the NAS on your local machine to analyze the res
 scp -r login@bioinfo-san.ird.fr:/projects/medium/CIBiG_MOryzae/QC /path/to/working dorectory/on your laptop/
 ```
 
+
 ### 3. Mapping
+
+
 ### 4. SNP calling
