@@ -506,6 +506,7 @@ Open nano text editor
 ```bash
 nano FastQC_Trim.sh
 ```
+
 save the following sbatch script
 
 `̀``bash
@@ -615,6 +616,7 @@ nano MultiQC_Trim.sh
 ```
 
 save the following sbatch script
+
 
 ```bash
 #!/bin/bash
