@@ -381,9 +381,9 @@ mkdir -p /scratch/MOryzae/DATA/Trimming
 
 Make sure you're in the /SCRIPTS directory
 
-`̀``bash
+```bash
 cd /scratch/MOryzae/SCRIPTS/
-`̀``
+```
 
 Open nano text editor
 
@@ -509,7 +509,7 @@ nano FastQC_Trim.sh
 
 save the following sbatch script
 
-`̀``bash
+```bash
 #!/bin/bash
 
 ############# SLURM Configuration ##############
