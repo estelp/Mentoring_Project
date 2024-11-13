@@ -12,27 +12,29 @@
 #SBATCH -c 8
 
 ### Specify the node to run on
-#SBATCH --nodelist=node13  # Specifies that the job should run on node13
+#SBATCH --nodelist=node20  # Spécifie que le job doit être exécuté sur node20
 
 #################################################
 
 ########### Execution Command ##################
 
-# Define paths to the working directories
+# Définir les chemins vers les répertoires de travail
 FASTQC_PATH="/scratch/MOryzae/QC/FastQC"
 MULTIQC_OUTPUT_PATH="/scratch/MOryzae/QC/MultiQC"
 
-# Load the MultiQC module
+# Charger le module MultiQC
 module load multiqc/1.9
 
-# Create the output directory
+# Créer le répertoire de sortie
+
 mkdir -p "$MULTIQC_OUTPUT_PATH"
 
-# Run MultiQC on the FastQC reports
+
+# Lancer MultiQC sur les rapports de FastQC
 echo "Running MultiQC on FastQC reports in $FASTQC_PATH..."
 multiqc "$FASTQC_PATH" -o "$MULTIQC_OUTPUT_PATH"
 
-# Check if MultiQC ran successfully
+# Vérifier si MultiQC a réussi
 if [[ $? -eq 0 ]]; then
     echo "MultiQC completed successfully."
 else

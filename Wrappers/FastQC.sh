@@ -15,7 +15,7 @@
 #SBATCH --array=0-88%4  # 89 paires de fichiers (0 à 88)
 
 ### Specify the node to run on
-#SBATCH --nodelist=node13  # Spécifie que le job doit être exécuté sur node13
+#SBATCH --nodelist=node20  # Spécifie que le job doit être exécuté sur node20
 
 #################################################
 
