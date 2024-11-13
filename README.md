@@ -203,7 +203,7 @@ save the following sbatch script
 #SBATCH --array=0-88%4  # 89 paires de fichiers (0 à 88)
 
 ### Specify the node to run on
-#SBATCH --nodelist=node13  # Spécifie que le job doit être exécuté sur node13
+#SBATCH --nodelist=node20  # Spécifie que le job doit être exécuté sur node20
 
 #################################################
 
@@ -255,6 +255,7 @@ else
     echo "Error: One or both files do not exist: $file1, $file2."
     exit 1  # Quitter avec un code d'erreur
 fi
+
 
 ```
 
@@ -308,32 +309,35 @@ save the following sbatch script
 #SBATCH -c 8
 
 ### Specify the node to run on
-#SBATCH --nodelist=node13  # Specifies that the job should run on node13
+#SBATCH --nodelist=node20  # Spécifie que le job doit être exécuté sur node20
 
 #################################################
 
 ########### Execution Command ##################
 
-# Define paths to the working directories
+# Définir les chemins vers les répertoires de travail
 FASTQC_PATH="/scratch/MOryzae/QC/FastQC"
 MULTIQC_OUTPUT_PATH="/scratch/MOryzae/QC/MultiQC"
 
-# Load the MultiQC module
+# Charger le module MultiQC
 module load multiqc/1.9
 
-# Create the output directory
+# Créer le répertoire de sortie
+
 mkdir -p "$MULTIQC_OUTPUT_PATH"
 
-# Run MultiQC on the FastQC reports
+
+# Lancer MultiQC sur les rapports de FastQC
 echo "Running MultiQC on FastQC reports in $FASTQC_PATH..."
 multiqc "$FASTQC_PATH" -o "$MULTIQC_OUTPUT_PATH"
 
-# Check if MultiQC ran successfully
+# Vérifier si MultiQC a réussi
 if [[ $? -eq 0 ]]; then
     echo "MultiQC completed successfully."
 else
     echo "Error: MultiQC encountered an issue."
 fi
+
 
 ```
 
@@ -830,7 +834,7 @@ save the following sbatch script
 #SBATCH -p normal
 
 ### Set the number of CPUs to use
-#SBATCH -c 16
+#SBATCH -c 8
 
 ### Specify the node on which the job should run
 #SBATCH --nodelist=node20  # Specifies that the job should run on node20
@@ -840,14 +844,14 @@ save the following sbatch script
 ########### Path Variables ##################
 
 # Define paths for data and output directories
-REF_PATH="/scratch/MOryzae/REF/GCF_009730915_genomic.fna"
+REF_PATH="/scratch/MOryzae/REF/MOryzae_genomic.fna"
 TRIM_DATA_PATH="/scratch/MOryzae/DATA/Trimming"
 OUTPUT_PATH="/scratch/MOryzae/MAPPING"
-SAM_PATH="/scratch/MOryzae/MAPPING/sam_files"
-BAM_PATH="/scratch/MOryzae/MAPPING/bam_raw"
-STATS_PATH="/scratch/MOryzae/MAPPING/bam_stats"
-FILTERED_PATH="/scratch/MOryzae/MAPPING/bam_filtered"
-SORTED_PATH="/scratch/MOryzae/MAPPING/bam_mapped_sort"
+SAM_PATH="${OUTPUT_PATH}/sam_files"
+BAM_PATH="${OUTPUT_PATH}/bam_raw"
+STATS_PATH="${OUTPUT_PATH}/bam_stats"
+FILTERED_PATH="${OUTPUT_PATH}/bam_filtered"
+SORTED_PATH="${OUTPUT_PATH}/bam_mapped_sort"
 STAT_FILE="${STATS_PATH}/all_stat.csv"
 
 # Load bwa-mem2 and samtools modules
@@ -855,20 +859,16 @@ module load bwamem2/2.2.1
 module load samtools/1.18
 
 # List of sequences
-sequences=("12-1-205" "BN0019" "Br80" "CHRF" "GN0001" "IN0114" "JP0091" "Pg1213-22" "PY86-1" 
-           "TN0002" "WBKY11" "87-120" "BN0119" "CD0065" "CHW" "GRF52" "IN0115" "LpKY97" 
-           "PgKY" "SSFL02" "TN0050" "WHTQ" "AG0004" "BN0123" "CD0142" "CM0028" "GY0040" 
-           "IN0116" "ML0060" "PGPA" "SSFL14-3" "TN0057" "Y34" "Arcadia" "BN0202" "CD0156" 
-           "EI9411" "HO" "INA168" "ML0062" "PH42" "SV9610" "TN0065" "Z2-1" "B2" "BN0252" 
-           "CD0156" "EI9604" "IA1" "IR00102" "ML33" "PL2-1" "SV9623" "TN0090" "B51" 
-           "BR0032" "CH0043" "FH" "IB33" "IR0013" "NG0012" "PL3-1" "T25" "TR0025" "B71" 
-           "BR0032" "CH0072" "FR1067" "IB49" "IR0015" "NG0054" "PY0925" "TF05-1" "US0041" 
-           "Bd8401" "Br130" "CH0452" "FR1069" "IC17" "IR0083" "NP0058" "PY36-1" "TG0004" 
-           "US0064" "BdBar" "Br48" "CH0461" "G17" "IE1K" "IR0084" "P131" "PY5033" "TG0032" 
-           "US0071" "BdMeh" "Br58" "CH0533" "G22" "IN0017" "IR0088" "P28" "PY5033" 
-           "TH0016" "US0071" "BF0072" "Br62" "CH1103" "GFSI1-7-2" "IN0054" "IR0095" 
-           "P29" "PY6017" "TH0016" "VT0027" "Bm88324" "Br7" "CH1164" "GG11" "IN0059" 
-           "IT0010" "P3" "PY6045" "TN0001" "VT0030")
+sequences=("AG0004" "BN0123" "CH0461" "G22" "IE1K" "IR0015" "ML33" "PH42" "TN0057"
+       "Arcadia" "BN0202" "CH0533" "GFSI1-7-2" "IN0017" "IR0083" "NG0012" "PL2-1" "TN0065"
+       "B2" "BN0252" "CH1103" "GG11" "IN0054" "IR0084" "NG0054" "SSFL02" "TN0090"
+       "B71" "Br7" "CH1164" "GN0001" "IN0059" "IR0088" "NP0058" "SSFL14-3" "TR0025"
+       "Bd8401" "Br80" "CHRF" "GY0040" "IN0114" "IR0095" "P28" "T25" "US0041"
+       "BdBar" "CD0065" "CHW" "HO" "IN0115" "IT0010" "P29" "TG0004" "US0064"
+       "BF0072" "CD0142" "CM0028" "IA1" "IN0116" "JP0091" "P3" "TG0032" "VT0027"
+       "Bm88324" "CH0043" "FR1067" "IB33" "INA168" "LpKY-97-1" "Pg1213-22" "TN0001" "VT0030"
+       "BN0019" "CH0072" "FR1069" "IB49" "IR00102" "ML0060" "PgKY4OV2-1" "TN0002" "Z2-1"
+       "BN0119" "CH0452" "G17" "IC17" "IR0013" "ML0062" "PgPA18C-02" "TN0050")
 
 #################################################
 
@@ -894,94 +894,43 @@ for sequence in "${sequences[@]}"; do
     FLAGSTAT_FILE="${STATS_PATH}/${sequence}.flagstat"
     FILTERED_BAM="${FILTERED_PATH}/${sequence}.mappedpaired.bam"
     SORTED_BAM="${SORTED_PATH}/${sequence}.mappedpaired.sorted.bam"
-    SORTED_BAM_INDEX="${SORTED_PATH}/${sequence}.mappedpaired.sorted.bam.bai"
     
-    # Check if input files exist
-    if [[ -f "$R1" && -f "$R2" ]]; then
-        # Step 1: Mapping with bwa-mem2
-        bwa-mem2 mem -t 16 "$REF_PATH" "$R1" "$R2" -o "$SAM_FILE"
-        if [[ $? -ne 0 ]]; then
-            echo "Mapping error for ${sequence}. Skipping."
-            continue
-        fi
-        echo "Mapping completed for ${sequence}"
-    else
-        echo "Error: Missing files for ${sequence}. Check ${R1} and ${R2}."
-        continue
-    fi
-
+    # Step 1: Mapping with bwa-mem2
+    bwa-mem2 mem -t 8 "$REF_PATH" "$R1" "$R2" -o "$SAM_FILE"
+    echo "Mapping completed for ${sequence}"
+    
     # Step 2: Convert SAM to BAM
-    if [[ -f "$SAM_FILE" ]]; then
-        samtools view -b -o "$BAM_FILE" "$SAM_FILE"
-        if [[ $? -ne 0 ]]; then
-            echo "Error during SAM to BAM conversion for ${sequence}. Skipping."
-            continue
-        fi
-        echo "SAM to BAM conversion successful for ${sequence}"
-    else
-        echo "Error: Missing SAM file for ${sequence}."
-        continue
-    fi
-
+    samtools view -b -o "$BAM_FILE" "$SAM_FILE"
+    echo "SAM to BAM conversion successful for ${sequence}"
+    
     # Step 3: Generate statistics using flagstat
-    if [[ -f "$BAM_FILE" ]]; then
-        samtools flagstat -@ 16 "$BAM_FILE" > "$FLAGSTAT_FILE"
-        if [[ $? -ne 0 ]]; then
-            echo "Error extracting statistics for ${sequence}. Skipping."
-            continue
-        fi
-        echo "Statistics generated for ${sequence}: ${FLAGSTAT_FILE}"
+    samtools flagstat -@ 8 "$BAM_FILE" > "$FLAGSTAT_FILE"
+    echo "Statistics generated for ${sequence}: ${FLAGSTAT_FILE}"
 
-        # Extract statistics data and append it to the CSV file
-        mapped=$(grep "mapped (" "$FLAGSTAT_FILE" | awk '{print $1}')
-        primary_mapped=$(grep "primary paired (" "$FLAGSTAT_FILE" | awk '{print $1}')
-        properly_paired=$(grep "properly paired (" "$FLAGSTAT_FILE" | awk '{print $1}')
-        unmapped=$(grep "unmapped (" "$FLAGSTAT_FILE" | awk '{print $1}')
-        
-        echo "${sequence},${mapped},${primary_mapped},${properly_paired},${unmapped}" >> "$STAT_FILE"
-    else
-        echo "Error: Missing BAM file for ${sequence}."
-        continue
-    fi
-
+    # Extract statistics data and append it to the CSV file
+    mapped=$(grep "mapped (" "$FLAGSTAT_FILE" | awk '{print $1}')
+    primary_mapped=$(grep "primary mapped (" "$FLAGSTAT_FILE" | awk '{print $1}')
+    properly_paired=$(grep "properly paired (" "$FLAGSTAT_FILE" | awk '{print $1}')
+    unmapped=$(grep "unmapped (" "$FLAGSTAT_FILE" | awk '{print $1}')
+    echo "${sequence},${mapped},${primary_mapped},${properly_paired},${unmapped}" >> "$STAT_FILE"
+    
     # Step 4: Filter BAM files
-    if [[ -f "$BAM_FILE" ]]; then
-        samtools view -bh -@ 16 -f 0x02 -o "$FILTERED_BAM" "$BAM_FILE"
-        if [[ $? -ne 0 ]]; then
-            echo "Error during BAM filtering for ${sequence}. Skipping."
-            continue
-        fi
-        echo "Filtered BAM created for ${sequence}: ${FILTERED_BAM}"
-    else
-        echo "Error: Missing BAM file for ${sequence}."
-        continue
-    fi
-
+    samtools view -bh -@ 8 -f 0x02 -o "$FILTERED_BAM" "$BAM_FILE"
+    echo "Filtered BAM created for ${sequence}: ${FILTERED_BAM}"
+    
     # Step 5: Sort the filtered BAM files
-    if [[ -f "$FILTERED_BAM" ]]; then
-        samtools sort -@ 16 "$FILTERED_BAM" -o "$SORTED_BAM"
-        if [[ $? -ne 0 ]]; then
-            echo "Error during BAM sorting for ${sequence}. Skipping."
-            continue
-        fi
-        echo "Sorted BAM created for ${sequence}: ${SORTED_BAM}"
-    else
-        echo "Error: Missing filtered BAM file for ${sequence}."
-        continue
-    fi
-
+    samtools sort -@ 8 "$FILTERED_BAM" -o "$SORTED_BAM"
+    echo "Sorted BAM created for ${sequence}: ${SORTED_BAM}"
+    
     # Step 6: Index the sorted BAM file
-    if [[ -f "$SORTED_BAM" ]]; then
-        samtools index "$SORTED_BAM"
-        if [[ $? -ne 0 ]]; then
-            echo "Error during BAM indexing for ${sequence}. Skipping."
-            continue
-        fi
+    samtools index "$SORTED_BAM"
+    echo "Indexing completed for ${sequence}"
+    
+done
 
 ```
 
-Run the script
-[Access mapping_pipeline.sh](/Wrappers/mapping_pipeline.sh)
+Run the script [Access mapping_pipeline.sh](/Wrappers/mapping_pipeline.sh)
 
 ```bash
 sbash mapping_pipeline.sh
