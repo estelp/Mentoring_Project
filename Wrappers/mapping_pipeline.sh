@@ -9,7 +9,7 @@
 #SBATCH -p normal
 
 ### Set the number of CPUs to use
-#SBATCH -c 16
+#SBATCH -c 8
 
 ### Specify the node on which the job should run
 #SBATCH --nodelist=node20  # Specifies that the job should run on node20
@@ -22,11 +22,11 @@
 REF_PATH="/scratch/MOryzae/REF/MOryzae_genomic.fna"
 TRIM_DATA_PATH="/scratch/MOryzae/DATA/Trimming"
 OUTPUT_PATH="/scratch/MOryzae/MAPPING"
-SAM_PATH="/scratch/MOryzae/MAPPING/sam_files"
-BAM_PATH="/scratch/MOryzae/MAPPING/bam_raw"
-STATS_PATH="/scratch/MOryzae/MAPPING/bam_stats"
-FILTERED_PATH="/scratch/MOryzae/MAPPING/bam_filtered"
-SORTED_PATH="/scratch/MOryzae/MAPPING/bam_mapped_sort"
+SAM_PATH="${OUTPUT_PATH}/sam_files"
+BAM_PATH="${OUTPUT_PATH}/bam_raw"
+STATS_PATH="${OUTPUT_PATH}/bam_stats"
+FILTERED_PATH="${OUTPUT_PATH}/bam_filtered"
+SORTED_PATH="${OUTPUT_PATH}/bam_mapped_sort"
 STAT_FILE="${STATS_PATH}/all_stat.csv"
 
 # Load bwa-mem2 and samtools modules
@@ -73,86 +73,36 @@ for sequence in "${sequences[@]}"; do
     FLAGSTAT_FILE="${STATS_PATH}/${sequence}.flagstat"
     FILTERED_BAM="${FILTERED_PATH}/${sequence}.mappedpaired.bam"
     SORTED_BAM="${SORTED_PATH}/${sequence}.mappedpaired.sorted.bam"
-    SORTED_BAM_INDEX="${SORTED_PATH}/${sequence}.mappedpaired.sorted.bam.bai"
     
-    # Check if input files exist
-    if [[ -f "$R1" && -f "$R2" ]]; then
-        # Step 1: Mapping with bwa-mem2
-        bwa-mem2 mem -t 16 "$REF_PATH" "$R1" "$R2" -o "$SAM_FILE"
-        if [[ $? -ne 0 ]]; then
-            echo "Mapping error for ${sequence}. Skipping."
-            continue
-        fi
-        echo "Mapping completed for ${sequence}"
-    else
-        echo "Error: Missing files for ${sequence}. Check ${R1} and ${R2}."
-        continue
-    fi
-
+    # Step 1: Mapping with bwa-mem2
+    bwa-mem2 mem -t 8 "$REF_PATH" "$R1" "$R2" -o "$SAM_FILE"
+    echo "Mapping completed for ${sequence}"
+    
     # Step 2: Convert SAM to BAM
-    if [[ -f "$SAM_FILE" ]]; then
-        samtools view -b -o "$BAM_FILE" "$SAM_FILE"
-        if [[ $? -ne 0 ]]; then
-            echo "Error during SAM to BAM conversion for ${sequence}. Skipping."
-            continue
-        fi
-        echo "SAM to BAM conversion successful for ${sequence}"
-    else
-        echo "Error: Missing SAM file for ${sequence}."
-        continue
-    fi
-
+    samtools view -b -o "$BAM_FILE" "$SAM_FILE"
+    echo "SAM to BAM conversion successful for ${sequence}"
+    
     # Step 3: Generate statistics using flagstat
-    if [[ -f "$BAM_FILE" ]]; then
-        samtools flagstat -@ 16 "$BAM_FILE" > "$FLAGSTAT_FILE"
-        if [[ $? -ne 0 ]]; then
-            echo "Error extracting statistics for ${sequence}. Skipping."
-            continue
-        fi
-        echo "Statistics generated for ${sequence}: ${FLAGSTAT_FILE}"
+    samtools flagstat -@ 8 "$BAM_FILE" > "$FLAGSTAT_FILE"
+    echo "Statistics generated for ${sequence}: ${FLAGSTAT_FILE}"
 
-        # Extract statistics data and append it to the CSV file
-        mapped=$(grep "mapped (" "$FLAGSTAT_FILE" | awk '{print $1}')
-        primary_mapped=$(grep "primary paired (" "$FLAGSTAT_FILE" | awk '{print $1}')
-        properly_paired=$(grep "properly paired (" "$FLAGSTAT_FILE" | awk '{print $1}')
-        unmapped=$(grep "unmapped (" "$FLAGSTAT_FILE" | awk '{print $1}')
-        
-        echo "${sequence},${mapped},${primary_mapped},${properly_paired},${unmapped}" >> "$STAT_FILE"
-    else
-        echo "Error: Missing BAM file for ${sequence}."
-        continue
-    fi
-
+    # Extract statistics data and append it to the CSV file
+    mapped=$(grep "mapped (" "$FLAGSTAT_FILE" | awk '{print $1}')
+    primary_mapped=$(grep "primary mapped (" "$FLAGSTAT_FILE" | awk '{print $1}')
+    properly_paired=$(grep "properly paired (" "$FLAGSTAT_FILE" | awk '{print $1}')
+    unmapped=$(grep "unmapped (" "$FLAGSTAT_FILE" | awk '{print $1}')
+    echo "${sequence},${mapped},${primary_mapped},${properly_paired},${unmapped}" >> "$STAT_FILE"
+    
     # Step 4: Filter BAM files
-    if [[ -f "$BAM_FILE" ]]; then
-        samtools view -bh -@ 16 -f 0x02 -o "$FILTERED_BAM" "$BAM_FILE"
-        if [[ $? -ne 0 ]]; then
-            echo "Error during BAM filtering for ${sequence}. Skipping."
-            continue
-        fi
-        echo "Filtered BAM created for ${sequence}: ${FILTERED_BAM}"
-    else
-        echo "Error: Missing BAM file for ${sequence}."
-        continue
-    fi
-
+    samtools view -bh -@ 8 -f 0x02 -o "$FILTERED_BAM" "$BAM_FILE"
+    echo "Filtered BAM created for ${sequence}: ${FILTERED_BAM}"
+    
     # Step 5: Sort the filtered BAM files
-    if [[ -f "$FILTERED_BAM" ]]; then
-        samtools sort -@ 16 "$FILTERED_BAM" -o "$SORTED_BAM"
-        if [[ $? -ne 0 ]]; then
-            echo "Error during BAM sorting for ${sequence}. Skipping."
-            continue
-        fi
-        echo "Sorted BAM created for ${sequence}: ${SORTED_BAM}"
-    else
-        echo "Error: Missing filtered BAM file for ${sequence}."
-        continue
-    fi
-
+    samtools sort -@ 8 "$FILTERED_BAM" -o "$SORTED_BAM"
+    echo "Sorted BAM created for ${sequence}: ${SORTED_BAM}"
+    
     # Step 6: Index the sorted BAM file
-    if [[ -f "$SORTED_BAM" ]]; then
-        samtools index "$SORTED_BAM"
-        if [[ $? -ne 0 ]]; then
-            echo "Error during BAM indexing for ${sequence}. Skipping."
-            continue
-        fi
+    samtools index "$SORTED_BAM"
+    echo "Indexing completed for ${sequence}"
+    
+done
