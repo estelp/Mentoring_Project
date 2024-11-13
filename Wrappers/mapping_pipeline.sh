@@ -19,7 +19,7 @@
 ########### Path Variables ##################
 
 # Define paths for data and output directories
-REF_PATH="/scratch/MOryzae/REF/GCF_009730915_genomic.fna"
+REF_PATH="/scratch/MOryzae/REF/MOryzae_genomic.fna"
 TRIM_DATA_PATH="/scratch/MOryzae/DATA/Trimming"
 OUTPUT_PATH="/scratch/MOryzae/MAPPING"
 SAM_PATH="/scratch/MOryzae/MAPPING/sam_files"
