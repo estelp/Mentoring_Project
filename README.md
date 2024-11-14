@@ -967,6 +967,12 @@ At the end of the task, check the contents
 ls -lh /scratch/MOryzae/MAPPING
 ```
 
+## Supprimer le sous répertoire sam_files dans le répertoire MAPPING afin de libérer plus d'espaces
+
+```bash
+rm -rf /scratch/MOryzae/MAPPING/sam_files
+```
+
 Use generated csv file to interpret this mapping step
 
 For the next step,
