@@ -852,7 +852,6 @@ BAM_PATH="${OUTPUT_PATH}/bam_raw"
 STATS_PATH="${OUTPUT_PATH}/bam_stats"
 FILTERED_PATH="${OUTPUT_PATH}/bam_filtered"
 SORTED_PATH="${OUTPUT_PATH}/bam_mapped_sort"
-STAT_FILE="${STATS_PATH}/all_stat.csv"
 
 # Load bwa-mem2 and samtools modules
 module load bwamem2/2.2.1
@@ -879,8 +878,6 @@ mkdir -p "$SAM_PATH" "$BAM_PATH" "$STATS_PATH" "$FILTERED_PATH" "$SORTED_PATH"
 
 ########### Step 1: Mapping, SAM to BAM conversion, Statistics, Filtering, Sorting ##################
 
-# Create the CSV statistics file and add headers
-echo "sample,total_reads,total_reads_perc,mapped_reads,mapped_reads_perc,properly_paired,properly_paired_perc,singletons,singletons_perc,unmapped_reads,unmapped_reads_perc,read1,read1_perc,read2,read2_perc" > "$STAT_FILE"
 
 # Loop over each sequence to perform all steps
 for sequence in "${sequences[@]}"; do
@@ -921,38 +918,6 @@ for sequence in "${sequences[@]}"; do
     
 done
 
-# Process each flagstat file and write results to CSV with percentages
-for file in "$STATS_PATH"/*flagstat; do
-    if [[ -f $file ]]; then
-        sample_name=$(basename "$file" | cut -d. -f1)
-        new_line="$sample_name,"
-        
-        # Extract values from the flagstat file
-        total_reads=$(grep "in total" "$file" | awk '{print $1}')
-        mapped_reads=$(grep "mapped (" "$file" | awk '{print $1}')
-        mapped_reads_perc=$(grep "mapped (" "$file" | awk -F '[()%]' '{print $2}')
-        
-        properly_paired=$(grep "properly paired (" "$file" | awk '{print $1}')
-        properly_paired_perc=$(grep "properly paired (" "$file" | awk -F '[()%]' '{print $2}')
-        
-        singletons=$(grep "singletons (" "$file" | awk '{print $1}')
-        singletons_perc=$(grep "singletons (" "$file" | awk -F '[()%]' '{print $2}')
-        
-        unmapped_reads=$((total_reads - mapped_reads))
-        unmapped_reads_perc=$(awk "BEGIN {print (100 - $mapped_reads_perc)}")
-        
-        read1=$(grep "read1" "$file" | awk '{print $1}')
-        read1_perc=$(awk "BEGIN {print ($read1/$total_reads)*100}")
-        
-        read2=$(grep "read2" "$file" | awk '{print $1}')
-        read2_perc=$(awk "BEGIN {print ($read2/$total_reads)*100}")
-        
-        # Append statistics with percentages to the CSV file
-        new_line+="${total_reads},100,${mapped_reads},${mapped_reads_perc},${properly_paired},${properly_paired_perc},${singletons},${singletons_perc},${unmapped_reads},${unmapped_reads_perc},${read1},${read1_perc},${read2},${read2_perc}"
-        echo "$new_line" >> "$STAT_FILE"
-    fi
-done
-
 ```
 
 Run the script [Access mapping_pipeline.sh](/Wrappers/mapping_pipeline.sh)
@@ -961,16 +926,143 @@ Run the script [Access mapping_pipeline.sh](/Wrappers/mapping_pipeline.sh)
 sbash mapping_pipeline.sh
 ```
 
+Group flagstat files into a single csv file
+
+Open nano text editor
+
+```bash
+nano flagstat.sh
+```
+
+save the following sbatch script
+
+```bash
+#!/bin/bash
+
+############# SLURM Configuration ##############
+
+### Set the job name
+#SBATCH --job-name=concatenate_flagstat
+
+### Set the partition to use
+#SBATCH -p normal
+
+### Set the number of CPUs to use
+#SBATCH -c 8
+
+### Specify the node on which the job should run
+#SBATCH --nodelist=node20  # Specifies that the job should run on node20
+
+#################################################
+
+# Path variables
+flagstat_dir="/scratch/MOryzae/MAPPING/bam_stats"  # Directory containing flagstat files
+stat_file="/scratch/MOryzae/MAPPING/bam_stats/all_stat.csv"  # Output file
+
+# List of prefix
+prefix=("AG0004" "BN0123" "CH0461" "G22" "IE1K" "IR0015" "ML33" "PH42" "TN0057"
+           "Arcadia" "BN0202" "CH0533" "GFSI1-7-2" "IN0017" "IR0083" "NG0012" "PL2-1" "TN0065"
+           "B2" "BN0252" "CH1103" "GG11" "IN0054" "IR0084" "NG0054" "SSFL02" "TN0090"
+           "B71" "Br7" "CH1164" "GN0001" "IN0059" "IR0088" "NP0058" "SSFL14-3" "TR0025"
+           "Bd8401" "Br80" "CHRF" "GY0040" "IN0114" "IR0095" "P28" "T25" "US0041"
+           "BdBar" "CD0065" "CHW" "HO" "IN0115" "IT0010" "P29" "TG0004" "US0064"
+           "BF0072" "CD0142" "CM0028" "IA1" "IN0116" "JP0091" "P3" "TG0032" "VT0027"
+           "Bm88324" "CH0043" "FR1067" "IB33" "INA168" "LpKY-97-1" "Pg1213-22" "TN0001" "VT0030"
+           "BN0019" "CH0072" "FR1069" "IB49" "IR00102" "ML0060" "PgKY4OV2-1" "TN0002" "Z2-1"
+           "BN0119" "CH0452" "G17" "IC17" "IR0013" "ML0062" "PgPA18C-02" "TN0050")
+
+# Create the output file and write the headers
+echo "Sequence,total,primary,secondary,supplementary,duplicates,primary_duplicates,mapped,primary_mapped,paired_in_sequencing,read1,read2,properly_paired,singletons,unmapped" > "$stat_file"
+
+# Loop through each sequence
+for file in "${prefix[@]}"; do
+    # Define the corresponding flagstat file for the sequence
+    flagstat_file="${flagstat_dir}/${file}.flagstat"
+
+    # Check if the file exists
+    if [[ -f "$flagstat_file" ]]; then
+        # Initialize variables to store values from the flagstat file
+        total=0
+        primary=0
+        secondary=0
+        supplementary=0
+        duplicates=0
+        primary_duplicates=0
+        mapped=0
+        primary_mapped=0
+        paired_in_sequencing=0
+        read1=0
+        read2=0
+        properly_paired=0
+        singletons=0
+        unmapped=0
+
+        # Read the flagstat file line by line
+        while IFS= read -r line; do
+            # Extract values based on the specific keywords
+            if [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ in\ total ]]; then
+                total="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ primary ]]; then
+                primary="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ secondary ]]; then
+                secondary="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ supplementary ]]; then
+                supplementary="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ duplicates ]]; then
+                duplicates="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ primary\ duplicates ]]; then
+                primary_duplicates="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ mapped ]]; then
+                mapped="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ primary\ mapped ]]; then
+                primary_mapped="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ paired\ in\ sequencing ]]; then
+                paired_in_sequencing="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ read1 ]]; then
+                read1="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ read2 ]]; then
+                read2="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ properly\ paired ]]; then
+                properly_paired="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^([0-9]+)\ \+\ [0-9]+\ singletons ]]; then
+                singletons="${BASH_REMATCH[1]}"
+            fi
+        done < "$flagstat_file"
+
+        # Calculate unmapped reads
+        unmapped=$((total - mapped))
+
+        # Write the results to the CSV file
+        echo "$file,$total,$primary,$secondary,$supplementary,$duplicates,$primary_duplicates,$mapped,$primary_mapped,$paired_in_sequencing,$read1,$read2,$properly_paired,$singletons,$unmapped" >> "$stat_file"
+    else
+        echo "Warning: File for sequence $seq not found. Skipping."
+    fi
+done
+
+echo "Data extraction complete. Results saved in $stat_file."
+
+```
+
+Run the script
+[Access flagstat.sh](/Wrappers/flagstat.sh)
+
+```bash
+sbash flagstat.sh
+```
+
+
+## Delete the sam_files, bam_raw and bam_filtered subdirectories in the MAPPING directory to free up more space.
+
+```bash
+rm -rf /scratch/MOryzae/MAPPING/sam_files
+rm -rf /scratch/MOryzae/MAPPING/bam_raw
+rm -rf /scratch/MOryzae/MAPPING/bam_filtered
+```
+
 At the end of the task, check the contents
 
 ```bash
 ls -lh /scratch/MOryzae/MAPPING
-```
-
-## Supprimer le sous répertoire sam_files dans le répertoire MAPPING afin de libérer plus d'espaces
-
-```bash
-rm -rf /scratch/MOryzae/MAPPING/sam_files
 ```
 
 Use generated csv file to interpret this mapping step
@@ -1050,7 +1142,10 @@ save the following sbatch script
 #SBATCH -p normal
 
 ### Define number of CPUs to use
-#SBATCH -c 8
+#SBATCH -c 16
+
+### Specify the node to run on
+#SBATCH --nodelist=node20  # Spécifie que le job doit être exécuté sur node20
 
 #################################################
 
@@ -1064,6 +1159,7 @@ REF_GENOME="/scratch/MOryzae/REF/MOryzae_genomic.fna"
 SNP_STATS_DIR="/scratch/MOryzae/SNP/stats"
 OUTPUT_VCF="${VCF_PATH}.gz"
 SNP_FILE="/scratch/MOryzae/SNP/vcf_files/all_samples_snp.vcf"
+OUTPUT_VCF2="${SNP_FILE}.gz"
 ALLELE_FREQ_PATH="/scratch/MOryzae/SNP/allele_frequence"
 
 # Load necessary modules
@@ -1074,32 +1170,35 @@ module load vcftools/0.1.16
 # Create directories if necessary
 mkdir -p /scratch/MOryzae/SNP/bcf_files /scratch/MOryzae/SNP/vcf_files "$SNP_STATS_DIR" "$ALLELE_FREQ_PATH"
 
+
 # Use bcftools for mpileup and variant calling
 echo -e "######################\nGenerating BCF file"
-bcftools mpileup --threads 8 -f "$REF_GENOME" -O b -o "$BCF_PATH" "$SORTED_PATH"/*.mappedpaired.sorted.bam
+bcftools mpileup --threads 16 -f "$REF_GENOME" -O b -o "$BCF_PATH" "$SORTED_PATH"/*.mappedpaired.sorted.bam
 
 echo -e "######################\nVariant calling"
-bcftools call --threads 8 -v -c -o "$VCF_PATH" "$BCF_PATH"
+bcftools call --threads 16 -v -c -o "$VCF_PATH" "$BCF_PATH"
 
 echo -e "######################\nGenerating SNP statistics"
 bcftools stats "$VCF_PATH" > "$SNP_STATS_DIR/all_samples_SNP_statistics.txt"
-
 # Filter to keep only SNPs
 echo -e "######################\nFiltering SNPs"
 bcftools view -v snps "$VCF_PATH" -o "$SNP_FILE"
 
 # Compress and index the VCF file
 echo -e "######################\nCompressing and indexing VCF file"
-bgzip -c "$SNP_FILE" > "$OUTPUT_VCF"
+bgzip -c "$SNP_FILE" > "$OUTPUT_VCF2"
 bcftools index "$OUTPUT_VCF"
+bcftools index "$OUTPUT_VCF2"
 
 # Calculate allele frequencies
 echo -e "######################\nCalculating allele frequencies"
 vcftools --gzvcf "$OUTPUT_VCF" --freq --out "${ALLELE_FREQ_PATH}/AF" --max-alleles 2
 vcftools --gzvcf "$OUTPUT_VCF" --freq2 --out "${ALLELE_FREQ_PATH}/AF2" --max-alleles 2
 
-echo "BCF and VCF files generated successfully."
+vcftools --gzvcf "$OUTPUT_VCF2" --freq --out "${ALLELE_FREQ_PATH}/AF_2" --max-alleles 2
+vcftools --gzvcf "$OUTPUT_VCF2" --freq2 --out "${ALLELE_FREQ_PATH}/AF2_2" --max-alleles 2
 
+echo "BCF and VCF files generated successfully."
 
 ```
 
