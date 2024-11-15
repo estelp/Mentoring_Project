@@ -27,7 +27,6 @@ BAM_PATH="${OUTPUT_PATH}/bam_raw"
 STATS_PATH="${OUTPUT_PATH}/bam_stats"
 FILTERED_PATH="${OUTPUT_PATH}/bam_filtered"
 SORTED_PATH="${OUTPUT_PATH}/bam_mapped_sort"
-STAT_FILE="${STATS_PATH}/all_stat.csv"
 
 # Load bwa-mem2 and samtools modules
 module load bwamem2/2.2.1
@@ -54,8 +53,6 @@ mkdir -p "$SAM_PATH" "$BAM_PATH" "$STATS_PATH" "$FILTERED_PATH" "$SORTED_PATH"
 
 ########### Step 1: Mapping, SAM to BAM conversion, Statistics, Filtering, Sorting ##################
 
-# Create the CSV statistics file and add headers
-echo "sample,total_reads,total_reads_perc,mapped_reads,mapped_reads_perc,properly_paired,properly_paired_perc,singletons,singletons_perc,unmapped_reads,unmapped_reads_perc,read1,read1_perc,read2,read2_perc" > "$STAT_FILE"
 
 # Loop over each sequence to perform all steps
 for sequence in "${sequences[@]}"; do
@@ -94,36 +91,4 @@ for sequence in "${sequences[@]}"; do
     samtools index "$SORTED_BAM"
     echo "Indexing completed for ${sequence}"
     
-done
-
-# Process each flagstat file and write results to CSV with percentages
-for file in "$STATS_PATH"/*flagstat; do
-    if [[ -f $file ]]; then
-        sample_name=$(basename "$file" | cut -d. -f1)
-        new_line="$sample_name,"
-        
-        # Extract values from the flagstat file
-        total_reads=$(grep "in total" "$file" | awk '{print $1}')
-        mapped_reads=$(grep "mapped (" "$file" | awk '{print $1}')
-        mapped_reads_perc=$(grep "mapped (" "$file" | awk -F '[()%]' '{print $2}')
-        
-        properly_paired=$(grep "properly paired (" "$file" | awk '{print $1}')
-        properly_paired_perc=$(grep "properly paired (" "$file" | awk -F '[()%]' '{print $2}')
-        
-        singletons=$(grep "singletons (" "$file" | awk '{print $1}')
-        singletons_perc=$(grep "singletons (" "$file" | awk -F '[()%]' '{print $2}')
-        
-        unmapped_reads=$((total_reads - mapped_reads))
-        unmapped_reads_perc=$(awk "BEGIN {print (100 - $mapped_reads_perc)}")
-        
-        read1=$(grep "read1" "$file" | awk '{print $1}')
-        read1_perc=$(awk "BEGIN {print ($read1/$total_reads)*100}")
-        
-        read2=$(grep "read2" "$file" | awk '{print $1}')
-        read2_perc=$(awk "BEGIN {print ($read2/$total_reads)*100}")
-        
-        # Append statistics with percentages to the CSV file
-        new_line+="${total_reads},100,${mapped_reads},${mapped_reads_perc},${properly_paired},${properly_paired_perc},${singletons},${singletons_perc},${unmapped_reads},${unmapped_reads_perc},${read1},${read1_perc},${read2},${read2_perc}"
-        echo "$new_line" >> "$STAT_FILE"
-    fi
 done
