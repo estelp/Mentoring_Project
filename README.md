@@ -1133,19 +1133,8 @@ save the following sbatch script
 ```bash
 #!/bin/bash
 
-############# SLURM Configuration ##############
-
-### Define Job name
-#SBATCH --job-name=snp_calling
-
-### Define partition to use
-#SBATCH -p normal
-
-### Define number of CPUs to use
 #SBATCH -c 16
-
-### Specify the node to run on
-#SBATCH --nodelist=node20  # Spécifie que le job doit être exécuté sur node20
+#SBATCH --nodelist=node20
 
 #################################################
 
@@ -1157,8 +1146,8 @@ BCF_PATH="/scratch/MOryzae/SNP/bcf_files/all_samples.bcf"
 VCF_PATH="/scratch/MOryzae/SNP/vcf_files/all_samples.vcf"
 REF_GENOME="/scratch/MOryzae/REF/MOryzae_genomic.fna"
 SNP_STATS_DIR="/scratch/MOryzae/SNP/stats"
-OUTPUT_VCF="${VCF_PATH}.gz"
 SNP_FILE="/scratch/MOryzae/SNP/vcf_files/all_samples_snp.vcf"
+OUTPUT_VCF="${VCF_PATH}.gz"
 OUTPUT_VCF2="${SNP_FILE}.gz"
 ALLELE_FREQ_PATH="/scratch/MOryzae/SNP/allele_frequence"
 
@@ -1166,37 +1155,66 @@ ALLELE_FREQ_PATH="/scratch/MOryzae/SNP/allele_frequence"
 module load samtools/1.18
 module load bcftools/1.18
 module load vcftools/0.1.16
+module load htslib/1.19
 
 # Create directories if necessary
 mkdir -p /scratch/MOryzae/SNP/bcf_files /scratch/MOryzae/SNP/vcf_files "$SNP_STATS_DIR" "$ALLELE_FREQ_PATH"
 
-
-# Use bcftools for mpileup and variant calling
+# Step 1: Generate BCF file
 echo -e "######################\nGenerating BCF file"
-bcftools mpileup --threads 16 -f "$REF_GENOME" -O b -o "$BCF_PATH" "$SORTED_PATH"/*.mappedpaired.sorted.bam
+bcftools mpileup --threads 16 -f "$REF_GENOME" -O b -o "$BCF_PATH" "$SORTED_PATH"/*.mappedpaired.sorted.bam || {
+    echo "Error: Failed to generate BCF file" >&2
+    exit 1
+}
 
+# Step 2: Variant calling
 echo -e "######################\nVariant calling"
-bcftools call --threads 16 -v -c -o "$VCF_PATH" "$BCF_PATH"
+bcftools call --threads 16 -v -c -o "$VCF_PATH" "$BCF_PATH" || {
+    echo "Error: Variant calling failed" >&2
+    exit 1
+}
 
+# Step 3: Generate SNP statistics
 echo -e "######################\nGenerating SNP statistics"
-bcftools stats "$VCF_PATH" > "$SNP_STATS_DIR/all_samples_SNP_statistics.txt"
-# Filter to keep only SNPs
+bcftools stats "$VCF_PATH" > "$SNP_STATS_DIR/all_samples_SNP_statistics.txt" || {
+    echo "Error: Failed to generate SNP statistics" >&2
+    exit 1
+}
+
+# Step 4: Filter to keep only SNPs
 echo -e "######################\nFiltering SNPs"
-bcftools view -v snps "$VCF_PATH" -o "$SNP_FILE"
+bcftools view -v snps "$VCF_PATH" -o "$SNP_FILE" || {
+    echo "Error: Filtering SNPs failed" >&2
+    exit 1
+}
 
-# Compress and index the VCF file
-echo -e "######################\nCompressing and indexing VCF file"
-bgzip -c "$SNP_FILE" > "$OUTPUT_VCF2"
-bcftools index "$OUTPUT_VCF"
-bcftools index "$OUTPUT_VCF2"
+# Step 5: Compress and index the VCF file
+echo -e "######################\nCompressing and indexing VCF files"
+bgzip -c "$VCF_PATH" > "$OUTPUT_VCF" || {
+    echo "Error: Compression of VCF file failed" >&2
+    exit 1
+}
+bgzip -c "$SNP_FILE" > "$OUTPUT_VCF2" || {
+    echo "Error: Compression of SNP file failed" >&2
+    exit 1
+}
+bcftools index "$OUTPUT_VCF" || {
+    echo "Error: Indexing VCF file failed" >&2
+    exit 1
+}
+bcftools index "$OUTPUT_VCF2" || {
+    echo "Error: Indexing SNP file failed" >&2
+    exit 1
+}
 
-# Calculate allele frequencies
+# Step 6: Calculate allele frequencies
 echo -e "######################\nCalculating allele frequencies"
-vcftools --gzvcf "$OUTPUT_VCF" --freq --out "${ALLELE_FREQ_PATH}/AF" --max-alleles 2
-vcftools --gzvcf "$OUTPUT_VCF" --freq2 --out "${ALLELE_FREQ_PATH}/AF2" --max-alleles 2
-
-vcftools --gzvcf "$OUTPUT_VCF2" --freq --out "${ALLELE_FREQ_PATH}/AF_2" --max-alleles 2
-vcftools --gzvcf "$OUTPUT_VCF2" --freq2 --out "${ALLELE_FREQ_PATH}/AF2_2" --max-alleles 2
+vcftools --gzvcf "$OUTPUT_VCF" --freq --out "${ALLELE_FREQ_PATH}/AF" --max-alleles 2 || {
+    echo "Error: Calculating allele frequencies failed for $OUTPUT_VCF" >&2
+}
+vcftools --gzvcf "$OUTPUT_VCF" --freq2 --out "${ALLELE_FREQ_PATH}/AF_2" --max-alleles 2 || {
+    echo "Error: Calculating allele frequencies failed for $OUTPUT_VCF" >&2
+}
 
 echo "BCF and VCF files generated successfully."
 
