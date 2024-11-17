@@ -1233,6 +1233,54 @@ At the end of the task, check the contents
 ls -lh /scratch/MOryzae/SNP
 ```
 
+Move to the SNP directory
+
+```bash
+cd /scratch/MOryzae/SNP/vcf_files
+```
+
+Load bcftools module
+
+```bash
+module load bcftools/1.18
+```
+
+Use bcftools to list the names of current samples:
+
+```bash
+bcftools query -l all_samples.vcf.gz > samples.txt
+bcftools query -l all_samples_snp.vcf.gz> snp_samples.txt
+```
+
+Modify samples.txt or create a new file, e.g. new_samples.txt, 
+mapping the old names to the new simplified names.
+
+```bash
+awk -F'/' '{print $0 “\t” $NF}' samples.txt | sed 's/.mappedpaired.sorted.bam//g' > new_samples.txt
+awk -F '/' '{print $0 “\t” $NF}' snp_samples.txt | sed 's/.mappedpaired.sorted.bam//g' > new_snp_samples.txt
+```
+
+Recover isolate names only in a new text file
+
+```bash
+awk -F'/' '{print $0 “\t” $NF}' new_samples.txt | cut -f3 > new2_samples.txt
+awk -F'/' '{print $0 “\t” $NF}' new_snp_samples.txt | cut -f3 > new2_snp_samples.txt
+```
+
+Use bcftools reheader to apply the changes:
+
+```bash
+bcftools reheader -s new2_samples.txt -o all_samples_correct.vcf.gz all_samples.vcf.gz
+bcftools reheader -s new2_snp_samples.txt -o all_samples_snp_correct.vcf.gz all_samples_snp.vcf.gz
+```
+
+To check that the new names have been applied correctly:
+
+```bash
+bcftools query -l all_samples_correct.vcf.gz
+bcftools query -l all_samples_snp_correct.vcf.gz
+```
+
 Use generated files to interpret this step and plannig next analysis
 
 For the next step,
