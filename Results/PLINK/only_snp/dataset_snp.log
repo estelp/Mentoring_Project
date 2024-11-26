@@ -1,0 +1,28 @@
+PLINK v2.00a5.7LM 64-bit Intel (30 Oct 2023)
+Options in effect:
+  --allow-extra-chr
+  --missing
+  --out ./dataset_snp
+  --vcf /scratch/MOryzae/SNP/vcf_files/all_samples_snp_correct.vcf.gz
+
+Hostname: node20.itrop.net
+Working directory: /scratch/MOryzae/PLINK
+Start time: Sun Nov 17 19:32:24 2024
+
+Random number seed: 1731868344
+64281 MiB RAM detected, ~60853 available; reserving 32140 MiB for main
+workspace.
+Using up to 20 threads (change this with --threads).
+--vcf: 1605095 variants scanned.
+--vcf: ./dataset_snp-temporary.pgen + ./dataset_snp-temporary.pvar.zst +
+./dataset_snp-temporary.psam written.
+89 samples (0 females, 0 males, 89 ambiguous; 89 founders) loaded from
+./dataset_snp-temporary.psam.
+1605095 variants loaded from ./dataset_snp-temporary.pvar.zst.
+Note: No phenotype data present.
+Calculating sample missingness rates... done.
+Calculating allele frequencies... done.
+--missing: Sample missing data report written to ./dataset_snp.smiss .
+--missing: Variant missing data report written to ./dataset_snp.vmiss .
+
+End time: Sun Nov 17 19:32:27 2024

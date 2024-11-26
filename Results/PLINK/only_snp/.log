@@ -1,0 +1,16 @@
+PLINK v2.00a5.7LM 64-bit Intel (30 Oct 2023)
+Options in effect:
+  --cluster
+  --matrix
+  --out only_snp/
+  --pca 3
+  --vcf /scratch/MOryzae/SNP/vcf_files/all_samples_snp_correct.vcf.gz
+
+Hostname: node20.itrop.net
+Working directory: /scratch/MOryzae/PLINK
+Start time: Sun Nov 17 19:42:15 2024
+
+Error: Unrecognized flag ('--cluster').
+For more info, try "plink2 --help <flag name>" or "plink2 --help | more".
+
+End time: Sun Nov 17 19:42:15 2024
