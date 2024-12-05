@@ -1133,90 +1133,76 @@ save the following sbatch script
 ```bash
 #!/bin/bash
 
+############ SLURM Configuration ##############
+
+### Define Job name
+#SBATCH --job-name=snp2_calling
+
+### Define partition to use
+#SBATCH -p normal
+
+### Define number of CPUs to use
 #SBATCH -c 16
-#SBATCH --nodelist=node20
+
+### Specify the node to run on
+#SBATCH --nodelist=node20  # Run the job on node20
 
 #################################################
 
-########### Execution Command ##################
+########### Execution Commands ###################
 
-# Define file paths
+# Variables
 SORTED_PATH="/scratch/MOryzae/MAPPING/bam_mapped_sort"
-BCF_PATH="/scratch/MOryzae/SNP/bcf_files/all_samples.bcf"
-VCF_PATH="/scratch/MOryzae/SNP/vcf_files/all_samples.vcf"
+VCF_OUTPUT="/scratch/MOryzae/SNP/vcf_files/all_samples.vcf.gz"
+SNP_OUTPUT="/scratch/MOryzae/SNP/vcf_files/snp.vcf.gz"
 REF_GENOME="/scratch/MOryzae/REF/MOryzae_genomic.fna"
 SNP_STATS_DIR="/scratch/MOryzae/SNP/stats"
-SNP_FILE="/scratch/MOryzae/SNP/vcf_files/all_samples_snp.vcf"
-OUTPUT_VCF="${VCF_PATH}.gz"
-OUTPUT_VCF2="${SNP_FILE}.gz"
-ALLELE_FREQ_PATH="/scratch/MOryzae/SNP/allele_frequence"
 
 # Load necessary modules
 module load samtools/1.18
 module load bcftools/1.18
-module load vcftools/0.1.16
-module load htslib/1.19
 
-# Create directories if necessary
-mkdir -p /scratch/MOryzae/SNP/bcf_files /scratch/MOryzae/SNP/vcf_files "$SNP_STATS_DIR" "$ALLELE_FREQ_PATH"
+# Create necessary directories
+mkdir -p /scratch/MOryzae/SNP/vcf_files "$SNP_STATS_DIR"
 
-# Step 1: Generate BCF file
-echo -e "######################\nGenerating BCF file"
-bcftools mpileup --threads 16 -f "$REF_GENOME" -O b -o "$BCF_PATH" "$SORTED_PATH"/*.mappedpaired.sorted.bam || {
-    echo "Error: Failed to generate BCF file" >&2
+# Step 1: Generate VCF file, compress, and index
+echo -e "######################\nGenerating compressed VCF file"
+bcftools mpileup -Ou --threads 16 -f "$REF_GENOME" "$SORTED_PATH"/*.mappedpaired.sorted.bam | \
+  bcftools call -mv -Oz -o "$VCF_OUTPUT" || {
+    echo "Error: VCF generation and compression failed" >&2
     exit 1
 }
 
-# Step 2: Variant calling
-echo -e "######################\nVariant calling"
-bcftools call --threads 16 -v -c -o "$VCF_PATH" "$BCF_PATH" || {
-    echo "Error: Variant calling failed" >&2
+# Step 2: Index the compressed VCF file
+echo -e "######################\nIndexing compressed VCF file"
+bcftools index "$VCF_OUTPUT" || {
+    echo "Error: VCF file indexing failed" >&2
     exit 1
 }
 
-# Step 3: Generate SNP statistics
+# Step 3: Filter to retain only SNPs
+echo -e "######################\nFiltering to retain only SNPs"
+bcftools view -v snps -Oz -o "$SNP_OUTPUT" "$VCF_OUTPUT" || {
+    echo "Error: SNP filtering failed" >&2
+    exit 1
+}
+
+# Step 4: Index the SNP VCF file
+echo -e "######################\nIndexing SNP VCF file"
+bcftools index "$SNP_OUTPUT" || {
+    echo "Error: SNP VCF file indexing failed" >&2
+    exit 1
+}
+
+# Step 5: Generate SNP statistics
 echo -e "######################\nGenerating SNP statistics"
-bcftools stats "$VCF_PATH" > "$SNP_STATS_DIR/all_samples_SNP_statistics.txt" || {
+bcftools stats "$SNP_OUTPUT" > "$SNP_STATS_DIR/all_samples_SNP_statistics.txt" || {
     echo "Error: Failed to generate SNP statistics" >&2
     exit 1
 }
 
-# Step 4: Filter to keep only SNPs
-echo -e "######################\nFiltering SNPs"
-bcftools view -v snps "$VCF_PATH" -o "$SNP_FILE" || {
-    echo "Error: Filtering SNPs failed" >&2
-    exit 1
-}
+echo "Compressed VCF file and SNP-specific VCF file generated and indexed successfully."
 
-# Step 5: Compress and index the VCF file
-echo -e "######################\nCompressing and indexing VCF files"
-bgzip -c "$VCF_PATH" > "$OUTPUT_VCF" || {
-    echo "Error: Compression of VCF file failed" >&2
-    exit 1
-}
-bgzip -c "$SNP_FILE" > "$OUTPUT_VCF2" || {
-    echo "Error: Compression of SNP file failed" >&2
-    exit 1
-}
-bcftools index "$OUTPUT_VCF" || {
-    echo "Error: Indexing VCF file failed" >&2
-    exit 1
-}
-bcftools index "$OUTPUT_VCF2" || {
-    echo "Error: Indexing SNP file failed" >&2
-    exit 1
-}
-
-# Step 6: Calculate allele frequencies
-echo -e "######################\nCalculating allele frequencies"
-vcftools --gzvcf "$OUTPUT_VCF" --freq --out "${ALLELE_FREQ_PATH}/AF" --max-alleles 2 || {
-    echo "Error: Calculating allele frequencies failed for $OUTPUT_VCF" >&2
-}
-vcftools --gzvcf "$OUTPUT_VCF" --freq2 --out "${ALLELE_FREQ_PATH}/AF_2" --max-alleles 2 || {
-    echo "Error: Calculating allele frequencies failed for $OUTPUT_VCF" >&2
-}
-
-echo "BCF and VCF files generated successfully."
 
 ```
 
@@ -1248,37 +1234,32 @@ module load bcftools/1.18
 Use bcftools to list the names of current samples:
 
 ```bash
-bcftools query -l all_samples.vcf.gz > samples.txt
-bcftools query -l all_samples_snp.vcf.gz> snp_samples.txt
+bcftools query -l snp.vcf.gz> snp_samples.txt
 ```
 
 Modify samples.txt or create a new file, e.g. new_samples.txt, 
 mapping the old names to the new simplified names.
 
 ```bash
-awk -F'/' '{print $0 “\t” $NF}' samples.txt | sed 's/.mappedpaired.sorted.bam//g' > new_samples.txt
-awk -F '/' '{print $0 “\t” $NF}' snp_samples.txt | sed 's/.mappedpaired.sorted.bam//g' > new_snp_samples.txt
+awk -F'/' '{print $0 "\t" $NF}' snp_samples.txt | sed 's/.mappedpaired.sorted.bam//g' > new_snp_samples.txt
 ```
 
 Recover isolate names only in a new text file
 
 ```bash
-awk -F'/' '{print $0 “\t” $NF}' new_samples.txt | cut -f3 > new2_samples.txt
-awk -F'/' '{print $0 “\t” $NF}' new_snp_samples.txt | cut -f3 > new2_snp_samples.txt
+awk -F'/' '{print $0 "\t" $NF}' new_snp_samples.txt | cut -f3 > new2_snp_samples.txt
 ```
 
 Use bcftools reheader to apply the changes:
 
 ```bash
-bcftools reheader -s new2_samples.txt -o all_samples_correct.vcf.gz all_samples.vcf.gz
-bcftools reheader -s new2_snp_samples.txt -o all_samples_snp_correct.vcf.gz all_samples_snp.vcf.gz
+bcftools reheader -s new2_snp_samples.txt -o snp_correct.vcf.gz snp.vcf.gz
 ```
 
 To check that the new names have been applied correctly:
 
 ```bash
-bcftools query -l all_samples_correct.vcf.gz
-bcftools query -l all_samples_snp_correct.vcf.gz
+bcftools query -l snp_correct.vcf.gz
 ```
 
 Use generated files to interpret this step and plannig next analysis
@@ -1321,9 +1302,7 @@ module load plink/1.9
 Start evaluation of missing data
 
 ```bash
-plink -vcf /scratch/MOryzae/SNP/vcf_files/all_samples_snp_correct.vcf.gz --allow-extra-chr --missing --out ./dataset_snp
-
-plink -vcf /scratch/MOryzae/SNP/vcf_files/all_samples_correct.vcf.gz --allow-extra-chr --missing --out ./dataset
+plink -vcf /scratch/MOryzae/SNP/vcf_files/snp_correct.vcf.gz --allow-extra-chr --missing --out  ./plink/dataset
 ```
 
 #### Generate PCA using genotyping information contained in VCF
@@ -1336,9 +1315,7 @@ This will generate a matrix of coordinates in the different component. By defaul
 Run following commands
 
 ```bash
-plink -vcf /scratch/MOryzae/SNP/vcf_files/all_samples_snp_correct.vcf.gz --allow-extra-chr --cluster --matrix --pca 3 --out only_snp/dataset
-
-plink -vcf /scratch/MOryzae/SNP/vcf_files/all_samples_correct.vcf.gz --allow-extra-chr --cluster --matrix --pca 3 --out all_samples/dataset
+plink -vcf /scratch/MOryzae/SNP/vcf_files/snp_correct.vcf.gz --allow-extra-chr --cluster --matrix --pca 3 --mind --out ./plink/dataset
 ```
 
 #### Convert "eigenvec" generate file to csv file
@@ -1383,7 +1360,7 @@ INPUT_DIR="/scratch/MOryzae/PLINK"
 OUTPUT_DIR="/scratch/MOryzae/PLINK"
 
 # List of directories to process
-DIRECTORIES=("all_samples" "only_snp")
+DIRECTORIES=("plink")
 
 # Loop through each directory
 for DIR in "${DIRECTORIES[@]}"; do
@@ -1411,6 +1388,7 @@ for DIR in "${DIRECTORIES[@]}"; do
 done
 
 echo "PCA analysis completed. Results are saved in $OUTPUT_DIR."
+
 
 ```
 
@@ -1458,14 +1436,14 @@ save the following sbatch script
 
 ########### Execution Command ###################
 
-module load python/3.12  # Charge Python 3.12 sur le cluster
+module load python/3.12.0  # Charge Python 3.12 sur le cluster
 
 # Define directories
 PCA_RESULTS_DIR="/scratch/MOryzae/PLINK"
 OUTPUT_PLOT_DIR="/scratch/MOryzae/PLINK"
 
 # List of directories to process
-DIRECTORIES=("all_samples" "only_snp")
+DIRECTORIES=("plink")
 
 # Loop through each directory
 for DIRECTORY in "${DIRECTORIES[@]}"; do
@@ -1720,18 +1698,18 @@ module load python/3.12.0
 
 # Define directories
 PCA_RESULTS_DIR="/scratch/MOryzae/PLINK"
-OUTPUT_PLOT_DIR="/scratch/MOryzae/PCA"
+OUTPUT_PLOT_DIR="/scratch/MOryzae/PLINK/PCA"
 
 # Create output directory if it doesn't exist
 mkdir -p "$OUTPUT_PLOT_DIR"
 
 # List of subdirectories to process
-DIRECTORIES=("all_samples" "only_snp")
+DIRECTORIES=("plink")
 
 # Loop over each directory
 for DIRECTORY in "${DIRECTORIES[@]}"; do
     PCA_FILE="$PCA_RESULTS_DIR/$DIRECTORY/dataset.eigenvec"
-    OUTPUT_DIR="$OUTPUT_PLOT_DIR/$DIRECTORY"
+    OUTPUT_DIR="$OUTPUT_PLOT_DIR"
 
     # Check if the PCA file exists
     if [[ -f "$PCA_FILE" ]]; then
@@ -1764,7 +1742,6 @@ Move the entire contents of the PLINK and PCA directories to the NAS
 ```bash
 scp -r /scratch/MOryzae/PLINK/ san:/projects/medium/CIBiG_MOryzae/
 
-scp -r /scratch/MOryzae/PCA/ san:/projects/medium/CIBiG_MOryzae/
 ```
 
 Retrieve PLINK and PCA directories from the NAS on your local machine to analyze the results
@@ -1772,7 +1749,6 @@ Retrieve PLINK and PCA directories from the NAS on your local machine to analyze
 ```bash
 scp -r login@bioinfo-san.ird.fr:/projects/medium/CIBiG_MOryzae/PLINK /path/to/working dorectory/on your laptop/
 
-scp -r login@bioinfo-san.ird.fr:/projects/medium/CIBiG_MOryzae/PCA /path/to/working dorectory/on your laptop/
 ```
 
 #### DAPC
@@ -1800,8 +1776,8 @@ library(ggplot2)
 library(dplyr)
 
 # Définir les chemins d'entrée et de sortie
-input_file <- "/home/name/Documents/Projet_CIBiG/Mentoring_Project/Results/PLINK/all_samples/dataset.eigenvec"
-output_dir <- "/home/name/Documents/Projet_CIBiG/Mentoring_Project/Results/DAPC/all_samples"
+input_file <- "/home/name/Documents/Projet_CIBiG/Mentoring_Project/Results/PLINK/plink/dataset.eigenvec"
+output_dir <- "/home/name/Documents/Projet_CIBiG/Mentoring_Project/Results/PLINK/DAPC"
 
 # Créer le répertoire de sortie si nécessaire
 if (!dir.exists(output_dir)) {
@@ -1877,6 +1853,7 @@ cat("Graphique des contributions sauvegardé dans :", loading_file, "\n")
 results_file <- file.path(output_dir, "dapc_results_with_clusters.csv")
 write.csv(dapc_df, results_file, row.names = FALSE)
 cat("Résultats DAPC sauvegardés dans :", results_file, "\n")
+
 
 ```
 
@@ -1885,113 +1862,5 @@ Run the script
 
 ```R
 source("/path/to/working dorectory/on your laptop/dapc_analysis.R")
-```
-
-Open nano text editor
-
-```bash
-nano dapc_analysis2.R       
-```
-
-save the following sbatch script
-
-```R 
-# Charger les bibliothèques nécessaires
-if (!requireNamespace("adegenet")) install.packages("adegenet")
-if (!requireNamespace("factoextra")) install.packages("factoextra") # Pour le clustering
-if (!requireNamespace("ggplot2")) install.packages("ggplot2")
-if (!requireNamespace("dplyr")) install.packages("dplyr")
-
-library(adegenet)
-library(factoextra)
-library(ggplot2)
-library(dplyr)
-
-# Définir les chemins d'entrée et de sortie
-input_file <- "/home/name/Documents/Projet_CIBiG/Mentoring_Project/Results/PLINK/only_snp/dataset.eigenvec"
-output_dir <- "/home/name/Documents/Projet_CIBiG/Mentoring_Project/Results/DAPC/only_snp"
-
-# Créer le répertoire de sortie si nécessaire
-if (!dir.exists(output_dir)) {
-  dir.create(output_dir, recursive = TRUE)
-  cat("Répertoire de sortie créé :", output_dir, "\n")
-}
-
-# Charger les données PCA
-cat("Chargement des données PCA...\n")
-pca_data <- read.table(input_file, header = FALSE)
-colnames(pca_data) <- c("FID", "IID", "PC1", "PC2", "PC3")  # Modifier selon vos colonnes
-X <- pca_data %>% select(PC1, PC2, PC3)
-
-# Étape 1 : Clustering des individus (k-means)
-cat("Application de k-means pour générer des groupes...\n")
-set.seed(42)  # Pour assurer la reproductibilité
-n_clusters <- 3  # Ajustez selon vos besoins ou utilisez la méthode du coude (voir ci-dessous)
-kmeans_result <- kmeans(X, centers = n_clusters)
-
-# Ajouter les groupes au jeu de données
-pca_data$Group <- as.factor(kmeans_result$cluster)
-
-# Sauvegarder les groupes dans un fichier CSV
-groups_file <- file.path(output_dir, "groups_kmeans.csv")
-write.csv(pca_data, groups_file, row.names = FALSE)
-cat("Groupes sauvegardés dans :", groups_file, "\n")
-
-# Étape optionnelle : Déterminer le nombre optimal de clusters
-# Méthode du coude
-cat("Déterminer le nombre optimal de clusters avec la méthode du coude...\n")
-fviz_nbclust(X, kmeans, method = "wss") +
-  labs(title = "Méthode du coude pour déterminer k")
-
-# Étape 2 : DAPC
-cat("Optimisation du nombre de PCs pour DAPC...\n")
-dapc_initial <- dapc(X, pca_data$Group)
-optimal_pcs <- optim.a.score(dapc_initial)
-n_pcs <- optimal_pcs$n.pca
-cat(paste("Nombre optimal de PCs :", n_pcs, "\n"))
-
-# Réaliser la DAPC avec le nombre optimal de PCs
-dapc_result <- dapc(X, pca_data$Group, n.pca = n_pcs)
-
-# Étape 3 : Visualisation des résultats
-cat("Génération du graphique des clusters DAPC...\n")
-scatter_file <- file.path(output_dir, "dapc_scatter.png")
-png(scatter_file, width = 800, height = 600)
-scatter(dapc_result, scree.da = TRUE, posi.da = "bottomleft", scree.pca = TRUE)
-dev.off()
-cat("Graphique DAPC sauvegardé dans :", scatter_file, "\n")
-
-# Graphique ggplot des clusters
-dapc_df <- data.frame(dapc_result$ind.coord) %>%
-  mutate(Group = pca_data$Group)  # Ajouter les groupes au dataframe
-
-ggplot_file <- file.path(output_dir, "dapc_ggplot.png")
-gg <- ggplot(dapc_df, aes(x = LD1, y = LD2, color = Group)) +
-  geom_point(size = 3, alpha = 0.8) +
-  theme_minimal() +
-  labs(title = "Clusters DAPC", x = "Discriminant Axis 1", y = "Discriminant Axis 2")
-ggsave(ggplot_file, plot = gg, width = 8, height = 6)
-cat("Graphique ggplot DAPC sauvegardé dans :", ggplot_file, "\n")
-
-# Étape 4 : Contributions des variables
-cat("Visualisation des contributions des variables...\n")
-loading_file <- file.path(output_dir, "dapc_loadings.png")
-png(loading_file, width = 800, height = 600)
-loadingplot(dapc_result$var.contr, axis = 1, threshold = 0.005, lab.jitter = 1)
-dev.off()
-cat("Graphique des contributions sauvegardé dans :", loading_file, "\n")
-
-# Étape 5 : Sauvegarder les résultats
-results_file <- file.path(output_dir, "dapc_results_with_clusters.csv")
-write.csv(dapc_df, results_file, row.names = FALSE)
-cat("Résultats DAPC sauvegardés dans :", results_file, "\n")
-
-```
-
-Run the script
-[Access dapc_analysis2.R](/Wrappers/dapc_analysis2.R)
-
-```R   
-source("/path/to/working dorectory/on your laptop/dapc_analysis2.R")
 ```
 
