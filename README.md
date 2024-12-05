@@ -1864,3 +1864,791 @@ Run the script
 source("/path/to/working dorectory/on your laptop/dapc_analysis.R")
 ```
 
+## 5. SNP FILTRATION
+
+### 5.1. Evaluate some statistiques on VCF file
+
+Move to the SCRIPTS directory
+
+```bash
+cd /scratch/MOryzae/SCRIPTS
+```
+
+Open nano text editor
+
+```bash
+nano snp_statistic.sh
+```
+
+save the following sbatch script
+
+```bash
+#!/bin/bash
+
+############ SLURM Configuration ##############
+
+### Define Job name
+#SBATCH --job-name=snp_statistics
+
+### Define partition to use
+#SBATCH -p normal
+
+### Define number of CPUs to use
+#SBATCH -c 8
+
+### Specify the node to run on
+#SBATCH --nodelist=node20  # Run the job on node20
+
+#################################################
+
+########### Execution Commands ###################
+
+# Define directories
+SUBSET_VCF="/scratch/MOryzae/SNP/vcf_files/snp_correct.vcf.gz"
+OUT_DIR="/scratch/MOryzae/SNP/Others_stats"
+
+# Create output directory if it doesn't exist
+mkdir -p "$OUT_DIR"
+
+# Load necessary modules
+module load vcftools/0.1.16
+
+# Define base output name
+OUT_PREFIX="${OUT_DIR}/output"
+
+# Calculate allele frequency
+vcftools --gzvcf "$SUBSET_VCF" --remove-indels --freq2 --max-alleles 2 --out "$OUT_PREFIX"
+
+# Calculate mean depth per individual
+vcftools --gzvcf "$SUBSET_VCF" --remove-indels --depth --out "$OUT_PREFIX"
+
+# Calculate mean depth per site
+vcftools --gzvcf "$SUBSET_VCF" --remove-indels --site-mean-depth --out "$OUT_PREFIX"
+
+# Calculate site quality
+vcftools --gzvcf "$SUBSET_VCF" --remove-indels --site-quality --out "$OUT_PREFIX"
+
+# Calculate proportion of missing data per individual
+vcftools --gzvcf "$SUBSET_VCF" --remove-indels --missing-indv --out "$OUT_PREFIX"
+
+# Calculate proportion of missing data per site
+vcftools --gzvcf "$SUBSET_VCF" --remove-indels --missing-site --out "$OUT_PREFIX"
+
+# Calculate heterozygosity and inbreeding coefficient per individual
+vcftools --gzvcf "$SUBSET_VCF" --remove-indels --het --out "$OUT_PREFIX"
+
+echo "All SNP statistics have been computed. Results saved to $OUT_DIR"
+
+```
+
+Run the script
+[Access snp_statistic.sh](/Wrappers/snp_statistic.sh)
+
+```bash
+sbash snp_statistic.sh
+```
+
+Use generated files to interpret this step and plannig next analysis
+
+### 5.2. Examining statistics in R
+
+Open nano text editor
+
+```bash
+nano snp_statistic.R
+```
+
+save the following sbatch script
+
+```R
+# Load necessary libraries
+library(tidyverse)
+library(ggplot2)
+
+# Define working directories
+input_dir <- "/home/name/Documents/Projet_CIBiG/Mentoring_Project/Results/SNP/Others_stats"
+output_dir <- "/home/name/Documents/Projet_CIBiG/Mentoring_Project/Results/SNP/Others_stats/Plots"
+summary_file <- file.path(output_dir, "summary_statistics.txt")
+
+# Create output directory if it doesn't exist
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Set working directory
+setwd(input_dir)
+
+# Open summary file for writing
+summary_conn <- file(summary_file, open = "w")
+
+# Variant-based statistics
+
+# Variant quality
+var_qual <- read_delim(file.path(input_dir, "output.lqual"), delim = "\t",
+                       col_names = c("chr", "pos", "qual"), skip = 1)
+
+p <- ggplot(var_qual, aes(qual)) +
+  geom_density(fill = "dodgerblue1", colour = "black", alpha = 0.3) +
+  theme_light() +
+  ggtitle("Variant Quality Distribution")
+ggsave(file.path(output_dir, "variant_quality_density.png"), plot = p)
+
+summary_var_qual <- summary(var_qual$qual)
+writeLines("### Variant Quality Summary ###\n", summary_conn)
+writeLines(capture.output(summary_var_qual), summary_conn)
+
+# Variant mean depth
+var_depth <- read_delim(file.path(input_dir, "output.ldepth.mean"), delim = "\t",
+                        col_names = c("chr", "pos", "mean_depth", "var_depth"), skip = 1)
+
+p <- ggplot(var_depth, aes(mean_depth)) +
+  geom_density(fill = "dodgerblue1", colour = "black", alpha = 0.3) +
+  theme_light() +
+  xlim(0, 100) +
+  ggtitle("Mean Depth per Variant")
+ggsave(file.path(output_dir, "variant_depth_density.png"), plot = p)
+
+summary_var_depth <- summary(var_depth$mean_depth)
+writeLines("\n### Variant Mean Depth Summary ###\n", summary_conn)
+writeLines(capture.output(summary_var_depth), summary_conn)
+
+# Variant missingness
+var_miss <- read_delim(file.path(input_dir, "output.lmiss"), delim = "\t",
+                       col_names = c("chr", "pos", "nchr", "nfiltered", "nmiss", "fmiss"), skip = 1)
+
+p <- ggplot(var_miss, aes(fmiss)) +
+  geom_density(fill = "dodgerblue1", colour = "black", alpha = 0.3) +
+  theme_light() +
+  ggtitle("Missingness per Variant")
+ggsave(file.path(output_dir, "variant_missingness_density.png"), plot = p)
+
+summary_var_miss <- summary(var_miss$fmiss)
+writeLines("\n### Variant Missingness Summary ###\n", summary_conn)
+writeLines(capture.output(summary_var_miss), summary_conn)
+
+# Minor allele frequency
+var_freq <- read_delim(file.path(input_dir, "output.frq"), delim = "\t",
+                       col_names = c("chr", "pos", "nalleles", "nchr", "a1", "a2"), skip = 1)
+
+# Calculate minor allele frequency
+var_freq <- var_freq %>%
+  mutate(maf = pmin(as.numeric(a1), as.numeric(a2), na.rm = TRUE))
+
+p <- ggplot(var_freq, aes(maf)) +
+  geom_density(fill = "dodgerblue1", colour = "black", alpha = 0.3) +
+  theme_light() +
+  ggtitle("Minor Allele Frequency Distribution")
+ggsave(file.path(output_dir, "maf_density.png"), plot = p)
+
+summary_var_freq <- summary(var_freq$maf)
+writeLines("\n### Minor Allele Frequency Summary ###\n", summary_conn)
+writeLines(capture.output(summary_var_freq), summary_conn)
+
+# Individual-based statistics
+
+# Mean depth per individual
+ind_depth <- read_delim(file.path(input_dir, "output.idepth"), delim = "\t",
+                        col_names = c("ind", "nsites", "depth"), skip = 1)
+
+p <- ggplot(ind_depth, aes(depth)) +
+  geom_histogram(fill = "dodgerblue1", colour = "black", alpha = 0.3) +
+  theme_light() +
+  ggtitle("Mean Depth per Individual")
+ggsave(file.path(output_dir, "individual_depth_histogram.png"), plot = p)
+
+summary_ind_depth <- summary(ind_depth$depth)
+writeLines("\n### Individual Mean Depth Summary ###\n", summary_conn)
+writeLines(capture.output(summary_ind_depth), summary_conn)
+
+# Missing data per individual
+ind_miss <- read_delim(file.path(input_dir, "output.imiss"), delim = "\t",
+                       col_names = c("ind", "ndata", "nfiltered", "nmiss", "fmiss"), skip = 1)
+
+p <- ggplot(ind_miss, aes(fmiss)) +
+  geom_histogram(fill = "dodgerblue1", colour = "black", alpha = 0.3) +
+  theme_light() +
+  ggtitle("Missing Data per Individual")
+ggsave(file.path(output_dir, "individual_missing_data_histogram.png"), plot = p)
+
+summary_ind_miss <- summary(ind_miss$fmiss)
+writeLines("\n### Individual Missing Data Summary ###\n", summary_conn)
+writeLines(capture.output(summary_ind_miss), summary_conn)
+
+# Heterozygosity and inbreeding coefficient
+ind_het <- read_delim(file.path(input_dir, "output.het"), delim = "\t",
+                      col_names = c("ind", "ho", "he", "nsites", "f"), skip = 1)
+
+p <- ggplot(ind_het, aes(f)) +
+  geom_histogram(fill = "dodgerblue1", colour = "black", alpha = 0.3) +
+  theme_light() +
+  ggtitle("Inbreeding Coefficient Distribution")
+ggsave(file.path(output_dir, "inbreeding_coefficient_histogram.png"), plot = p)
+
+summary_ind_het <- summary(ind_het$f)
+writeLines("\n### Inbreeding Coefficient Summary ###\n", summary_conn)
+writeLines(capture.output(summary_ind_het), summary_conn)
+
+# Close summary file
+close(summary_conn)
+
+message("All plots and summary statistics have been saved to ", output_dir)
+
+```
+
+Run the script
+[Access snp_statistic.R](/Wrappers/snp_statistic.R)
+
+```bash
+source("/path/to/working dorectory/on your laptop/snp_statistic.R")
+```
+
+Use generated files to interpret this step and plannig next analysis
+
+
+### 5.3. String mode SNP filtering
+
+Move to the SCRIPTS directory
+
+```bash
+cd /scratch/MOryzae/SCRIPTS
+```
+
+Open nano text editor
+
+```bash
+nano snp_filtering.sh
+```
+
+save the following sbatch script
+
+```bash
+#!/bin/bash
+
+#SBATCH --job-name=snp_filtering
+#SBATCH -p normal
+#SBATCH -c 8
+#SBATCH --nodelist=node20
+
+# Définir les répertoires
+INPUT_DIR="/scratch/MOryzae/SNP/vcf_files"
+OUTPUT_DIR="/scratch/MOryzae/SNP/vcf_filtered"
+
+# Charger les modules nécessaires
+module load bcftools/1.18
+module load vcftools/0.1.16
+module load htslib/1.19
+
+# Paramètres de filtrage
+MAF=0.1
+MISS=0.9
+QUAL=19000
+
+# Fichiers
+VCF_IN="${INPUT_DIR}/snp_correct.vcf.gz"
+VCF_OUT="${OUTPUT_DIR}/filtered_snps.vcf.gz"
+VCF_STATS="${OUTPUT_DIR}/filtered_snps_stats.txt"
+
+# Vérifier que le répertoire de sortie existe
+if [ ! -d "$OUTPUT_DIR" ]; then
+    mkdir -p "$OUTPUT_DIR"
+    echo "Répertoire de sortie créé : $OUTPUT_DIR"
+fi
+
+# Vérifier que le fichier d'entrée existe
+if [ ! -f "$VCF_IN" ]; then
+    echo "Erreur : Le fichier d'entrée $VCF_IN n'existe pas."
+    exit 1
+fi
+
+# Exécuter vcftools pour filtrer les SNPs
+vcftools --gzvcf $VCF_IN \
+    --remove-indels \
+    --maf $MAF \
+    --max-missing $MISS \
+    --minQ $QUAL \
+    --recode \
+    --stdout | bgzip -c > $VCF_OUT
+
+# Vérifier que le fichier de sortie a été créé
+if [ ! -f "$VCF_OUT" ]; then
+    echo "Erreur : Le fichier $VCF_OUT n'a pas été généré."
+    exit 1
+fi
+echo "Filtrage terminé. Fichier filtré disponible à : $VCF_OUT"
+
+# Indexation avec bcftools
+bcftools index $VCF_OUT
+if [ $? -ne 0 ]; then
+    echo "Erreur lors de l'indexation du fichier filtré."
+    exit 1
+fi
+echo "Indexation terminée."
+
+# Calcul des statistiques avec bcftools
+bcftools stats $VCF_OUT > $VCF_STATS
+if [ $? -ne 0 ]; then
+    echo "Erreur lors du calcul des statistiques."
+    exit 1
+fi
+echo "Statistiques disponibles dans : $VCF_STATS"
+
+```
+
+Run the script
+[Access snp_filtering.sh](/Wrappers/snp_filtering.sh)
+
+```bash
+sbash snp_filtering.sh
+```
+
+Use generated files to interpret this step and plannig next analysis
+
+### 5.4. PCA & DAPC
+
+#### Generate PCA using genotyping information contained in VCF
+
+Plink alllows to create a PCA (principal components analysis) of samples, so that we can easily evaluate genetic distance between samples.
+
+This will generate a matrix of coordinates in the different component. By default, it provides the first 20 principal components of the variance-standardized relationship matrix. We will focus only the first 3 axes for subsequent visualization (--pca 3)
+
+Create a PLINK directory in the working directory
+
+```bash
+mkdir -p /scratch/MOryzae/PLINK2
+```
+
+Move to the created directory
+
+```bash
+cd PLINK2/
+```
+
+Load plink module first
+
+```bash
+module load plink/1.9
+```
+
+Start evaluation of missing data
+
+```bash
+plink -vcf /scratch/MOryzae/SNP/vcf_filtered/filtered_snps.vcf.gz --allow-extra-chr --cluster --matrix --pca 3 --mind --out ./plink/dataset
+```
+
+
+#### Convert "eigenvec" generate file to csv file
+
+Move to the SCRIPTS directory
+
+```bash
+cd /scratch/MOryzae/SCRIPTS
+```
+
+Open nano text editor
+
+```bash
+nano eigenvec2_to_csv.sh
+```
+
+save the following sbatch script
+
+```bash
+#!/bin/bash
+
+############# SLURM Configuration ##############
+
+### Define Job name
+#SBATCH --job-name=eigenvec_to_csv
+
+### Define partition to use
+#SBATCH -p normal
+
+### Define number of CPUs to use
+#SBATCH -c 8
+
+### Specify the node to run on
+#SBATCH --nodelist=node20  # Run the job on node20
+
+#################################################
+
+########### Execution Command ###################
+
+# Define directories
+INPUT_DIR="/scratch/MOryzae/PLINK2"
+OUTPUT_DIR="/scratch/MOryzae/PLINK2"
+
+# List of directories to process
+DIRECTORIES=("plink")
+
+# Loop through each directory
+for DIR in "${DIRECTORIES[@]}"; do
+    PCA_FILE="$INPUT_DIR/$DIR/dataset.eigenvec"
+    OUTPUT_CSV="$OUTPUT_DIR/$DIR/dataset.csv"
+
+    # Check if PCA results exist
+    if [ -f "$PCA_FILE" ]; then
+        echo "Processing PCA results for $DIR..."
+
+        # Convert eigenvec file to CSV format
+        awk 'NR==1{print "FID,IID,PC1,PC2,PC3"} NR>1{print $1","$2","$3","$4","$5}' "$PCA_FILE" > "$OUTPUT_CSV"
+
+        # Check if conversion was successful
+        if [ $? -eq 0 ]; then
+            echo "Conversion successful: $OUTPUT_CSV created."
+        else
+            echo "Error: Failed to convert $PCA_FILE to CSV."
+            exit 1
+        fi
+    else
+        echo "Error: PCA results file not found in $DIR."
+        exit 1
+    fi
+done
+
+echo "PCA analysis completed. Results are saved in $OUTPUT_DIR."
+
+
+```
+
+Run the script
+[Access eigenvec2_to_csv.sh](/Wrappers/eigenvec2_to_csv.sh)
+
+```bash
+sbash eigenvec2_to_csv.sh
+```
+
+#### PCA
+
+Move to the SCRIPTS directory
+
+```bash
+cd /scratch/MOryzae/SCRIPTS
+```
+
+Open nano text editor
+
+```bash
+nano pca2_plot.sh
+```
+
+save the following sbatch script
+
+```bash
+#!/bin/bash
+
+############# SLURM Configuration ##############
+
+### Define Job name
+#SBATCH --job-name=genome_pca_plot
+
+### Define partition to use
+#SBATCH -p normal
+
+### Define number of CPUs to use
+#SBATCH -c 8
+
+### Specify the node to run on
+#SBATCH --nodelist=node20
+
+#################################################
+
+########### Execution Command ###################
+
+module load python/3.12.0  # Charge Python 3.12 sur le cluster
+
+# Define directories
+PCA_RESULTS_DIR="/scratch/MOryzae/PLINK2"
+OUTPUT_PLOT_DIR="/scratch/MOryzae/PLINK2"
+
+# List of directories to process
+DIRECTORIES=("plink")
+
+# Loop through each directory
+for DIRECTORY in "${DIRECTORIES[@]}"; do
+    PCA_FILE="$PCA_RESULTS_DIR/$DIRECTORY/dataset.eigenvec"
+    OUTPUT_DIR="$OUTPUT_PLOT_DIR/$DIRECTORY"
+    OUTPUT_PLOT_2D="$OUTPUT_DIR/dataset_2D.png"
+    OUTPUT_PLOT_3D="$OUTPUT_DIR/dataset_3D.png"
+
+    # Ensure the output directory exists
+    mkdir -p "$OUTPUT_DIR"
+
+    # Check if the PCA results file exists
+    if [ -f "$PCA_FILE" ]; then
+        echo "Processing PCA results for $DIRECTORY..."
+        
+        # Call the Python script to generate the plots
+        python3 <<EOF
+import pandas as pd
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import os
+
+# Define input and output paths
+pca_results_file = "$PCA_FILE"
+output_plot_2D = "$OUTPUT_PLOT_2D"
+output_plot_3D = "$OUTPUT_PLOT_3D"
+
+# Read PCA results
+try:
+    pca_results = pd.read_csv(pca_results_file, sep=r'\s+', header=None)
+    pca_results.columns = ['FID', 'IID', 'PC1', 'PC2', 'PC3']
+except Exception as e:
+    print(f"Error reading PCA results file {pca_results_file}: {e}")
+    exit(1)
+
+# Plot 2D scatter plot for PC1 vs PC2
+try:
+    plt.figure(figsize=(8, 6))
+    plt.scatter(pca_results['PC1'], pca_results['PC2'], s=100)
+    plt.title('PCA Results: $DIRECTORY (2D)')
+    plt.xlabel('Principal Component 1')
+    plt.ylabel('Principal Component 2')
+    plt.grid()
+    plt.savefig(output_plot_2D)
+    plt.close()
+except Exception as e:
+    print(f"Error creating 2D plot for {pca_results_file}: {e}")
+    exit(1)
+
+# Plot 3D scatter plot for PC1, PC2, and PC3
+try:
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    scatter = ax.scatter(pca_results['PC1'], pca_results['PC2'], pca_results['PC3'], s=100, c='blue', alpha=0.7)
+    ax.set_title('PCA Results: $DIRECTORY (3D)')
+    ax.set_xlabel('Principal Component 1')
+    ax.set_ylabel('Principal Component 2')
+    ax.set_zlabel('Principal Component 3')
+    plt.savefig(output_plot_3D)
+    plt.close()
+except Exception as e:
+    print(f"Error creating 3D plot for {pca_results_file}: {e}")
+    exit(1)
+
+# Verify plots were created
+if not os.path.exists(output_plot_2D) or not os.path.exists(output_plot_3D):
+    print(f"Error: Output plots not created for {pca_results_file}")
+    exit(1)
+EOF
+
+        # Check if the Python script executed successfully
+        if [ $? -eq 0 ]; then
+            echo "Plots successfully created for $DIRECTORY: $OUTPUT_PLOT_2D, $OUTPUT_PLOT_3D"
+        else
+            echo "Error: Failed to create plots for $DIRECTORY."
+            exit 1
+        fi
+    else
+        echo "Error: PCA results file not found in $DIRECTORY."
+        exit 1
+    fi
+done
+
+echo "All PCA plots created successfully."
+
+```
+
+Run the script
+[Access pca2_plot.sh](/Wrappers/pca2_plot.sh)
+
+```bash
+sbash pca2_plot.sh
+```
+
+Using tools to interpret PCA results or plots
+
+To do this, we have three frequently used tools at our disposal
+ * Use k-means to partition the data, assuming a number of clusters.
+ * Apply DBSCAN to detect dense clusters and identify outliers.
+ * Use the elbow method and silhouette index to determine the optimal number of clusters.
+
+Open nano text editor
+
+```bash
+nano pca2_learning.sh
+```
+
+save the following sbatch script
+
+```bash
+#!/bin/bash
+
+############# SLURM Configuration ##############
+#SBATCH --job-name=pca_learning
+#SBATCH -p normal
+#SBATCH -c 8
+#SBATCH --nodelist=node20
+
+#################################################
+
+# Load necessary modules
+module load python/3.12.0
+
+# Define directories
+PCA_RESULTS_DIR="/scratch/MOryzae/PLINK2"
+OUTPUT_PLOT_DIR="/scratch/MOryzae/PLINK2/PCA"
+
+# Create output directory if it doesn't exist
+mkdir -p "$OUTPUT_PLOT_DIR"
+
+# List of subdirectories to process
+DIRECTORIES=("plink")
+
+# Loop over each directory
+for DIRECTORY in "${DIRECTORIES[@]}"; do
+    PCA_FILE="$PCA_RESULTS_DIR/$DIRECTORY/dataset.eigenvec"
+    OUTPUT_DIR="$OUTPUT_PLOT_DIR"
+
+    # Check if the PCA file exists
+    if [[ -f "$PCA_FILE" ]]; then
+        mkdir -p "$OUTPUT_DIR"
+        echo "Processing PCA file: $PCA_FILE"
+
+        # Run the Python script for clustering and plotting
+        python3 clustering_analysis.py "$PCA_FILE" "$OUTPUT_DIR"
+
+        echo "Processing completed for directory: $DIRECTORY"
+    else
+        echo "PCA file not found: $PCA_FILE"
+    fi
+done
+
+```
+
+Run the script
+[Access pca2_learning.sh](/Wrappers/pca2_learning.sh)
+
+```bash
+sbash pca2_learning.sh
+```
+
+Use generated files to interpret this step and plannig next analysis
+
+For the next step,
+Move the entire contents of the PLINK and PCA directories to the NAS
+
+```bash
+scp -r /scratch/MOryzae/PLINK2/ san:/projects/medium/CIBiG_MOryzae/
+
+```
+
+Retrieve PLINK and PCA directories from the NAS on your local machine to analyze the results
+
+```bash
+scp -r login@bioinfo-san.ird.fr:/projects/medium/CIBiG_MOryzae/PLINK2 /path/to/working dorectory/on your laptop/
+
+```
+
+#### DAPC
+
+Run the following commands on you local laptop
+
+Open nano text editor
+
+```bash
+nano dapc2_analysis.R
+```
+
+save the following sbatch script
+
+```R
+# Charger les bibliothèques nécessaires
+if (!requireNamespace("adegenet")) install.packages("adegenet")
+if (!requireNamespace("factoextra")) install.packages("factoextra") # Pour le clustering
+if (!requireNamespace("ggplot2")) install.packages("ggplot2")
+if (!requireNamespace("dplyr")) install.packages("dplyr")
+
+library(adegenet)
+library(factoextra)
+library(ggplot2)
+library(dplyr)
+
+# Définir les chemins d'entrée et de sortie
+input_file <- "/home/name/Documents/Projet_CIBiG/Mentoring_Project/Results/PLINK2/plink/dataset.eigenvec"
+output_dir <- "/home/name/Documents/Projet_CIBiG/Mentoring_Project/Results/PLINK2/DAPC"
+
+# Créer le répertoire de sortie si nécessaire
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+  cat("Répertoire de sortie créé :", output_dir, "\n")
+}
+
+# Charger les données PCA
+cat("Chargement des données PCA...\n")
+pca_data <- read.table(input_file, header = FALSE)
+colnames(pca_data) <- c("FID", "IID", "PC1", "PC2", "PC3")  # Modifier selon vos colonnes
+X <- pca_data %>% select(PC1, PC2, PC3)
+
+# Étape 1 : Clustering des individus (k-means)
+cat("Application de k-means pour générer des groupes...\n")
+set.seed(42)  # Pour assurer la reproductibilité
+n_clusters <- 3  # Ajustez selon vos besoins ou utilisez la méthode du coude (voir ci-dessous)
+kmeans_result <- kmeans(X, centers = n_clusters)
+
+# Ajouter les groupes au jeu de données
+pca_data$Group <- as.factor(kmeans_result$cluster)
+
+# Sauvegarder les groupes dans un fichier CSV
+groups_file <- file.path(output_dir, "groups_kmeans.csv")
+write.csv(pca_data, groups_file, row.names = FALSE)
+cat("Groupes sauvegardés dans :", groups_file, "\n")
+
+# Étape optionnelle : Déterminer le nombre optimal de clusters
+# Méthode du coude
+cat("Déterminer le nombre optimal de clusters avec la méthode du coude...\n")
+fviz_nbclust(X, kmeans, method = "wss") +
+  labs(title = "Méthode du coude pour déterminer k")
+
+# Étape 2 : DAPC
+cat("Optimisation du nombre de PCs pour DAPC...\n")
+dapc_initial <- dapc(X, pca_data$Group)
+optimal_pcs <- optim.a.score(dapc_initial)
+n_pcs <- optimal_pcs$n.pca
+cat(paste("Nombre optimal de PCs :", n_pcs, "\n"))
+
+# Réaliser la DAPC avec le nombre optimal de PCs
+dapc_result <- dapc(X, pca_data$Group, n.pca = n_pcs)
+
+# Étape 3 : Visualisation des résultats
+cat("Génération du graphique des clusters DAPC...\n")
+scatter_file <- file.path(output_dir, "dapc_scatter.png")
+png(scatter_file, width = 800, height = 600)
+scatter(dapc_result, scree.da = TRUE, posi.da = "bottomleft", scree.pca = TRUE)
+dev.off()
+cat("Graphique DAPC sauvegardé dans :", scatter_file, "\n")
+
+# Graphique ggplot des clusters
+dapc_df <- data.frame(dapc_result$ind.coord) %>%
+  mutate(Group = pca_data$Group)  # Ajouter les groupes au dataframe
+
+ggplot_file <- file.path(output_dir, "dapc_ggplot.png")
+gg <- ggplot(dapc_df, aes(x = LD1, y = LD2, color = Group)) +
+  geom_point(size = 3, alpha = 0.8) +
+  theme_minimal() +
+  labs(title = "Clusters DAPC", x = "Discriminant Axis 1", y = "Discriminant Axis 2")
+ggsave(ggplot_file, plot = gg, width = 8, height = 6)
+cat("Graphique ggplot DAPC sauvegardé dans :", ggplot_file, "\n")
+
+# Étape 4 : Contributions des variables
+cat("Visualisation des contributions des variables...\n")
+loading_file <- file.path(output_dir, "dapc_loadings.png")
+png(loading_file, width = 800, height = 600)
+loadingplot(dapc_result$var.contr, axis = 1, threshold = 0.005, lab.jitter = 1)
+dev.off()
+cat("Graphique des contributions sauvegardé dans :", loading_file, "\n")
+
+# Étape 5 : Sauvegarder les résultats
+results_file <- file.path(output_dir, "dapc_results_with_clusters.csv")
+write.csv(dapc_df, results_file, row.names = FALSE)
+cat("Résultats DAPC sauvegardés dans :", results_file, "\n")
+
+
+```
+
+Run the script
+[Access dapc2_analysis.R](/Wrappers/dapc2_analysis.R)
+
+```R
+source("/path/to/working dorectory/on your laptop/dapc2_analysis.R")
+```
