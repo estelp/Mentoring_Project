@@ -1,6 +1,6 @@
 new("snmfClass", directory = "K11/run9/", snmfClass.file = "filtered_snps_r9.11.snmfClass", 
-    K = 11L, run = 9L, CPU = 1L, seed = 149451293L, alpha = 10, 
+    K = 11L, run = 9L, CPU = 1L, seed = 1372362159L, alpha = 10, 
     percentage = 0.05, I = 0L, iterations = 200L, entropy = TRUE, 
-    tolerance = 1e-05, crossEntropy = 0.375233760701585, ploidy = 2L, 
+    tolerance = 1e-05, crossEntropy = 0.381088268832155, ploidy = 2L, 
     Q.input.file = "", Q.output.file = "filtered_snps_r9.11.Q", 
     G.output.file = "filtered_snps_r9.11.G")
